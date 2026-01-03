@@ -16,13 +16,34 @@ class WidgetsApplication < Gtk::Application
   end
 
   def on_activate
-    window = create_bar_window
-    @windows << window
-    window.present
+    # Create one bar per monitor
+    monitors = Compositor::Adapters::HyprlandIpc.monitors
+    monitors.each do |monitor|
+      window = create_bar_window(monitor['name'])
+      @windows << window
+      window.present
+    end
   end
 
   def on_startup
     Gtk::Settings.default.gtk_application_prefer_dark_theme = true
+    load_css
+  end
+
+  def load_css
+    provider = Gtk::CssProvider.new
+    css_path = File.join(File.dirname(__FILE__), '..', 'assets', 'style.css')
+
+    if File.exist?(css_path)
+      provider.load(path: css_path)
+      Gtk::StyleContext.add_provider_for_screen(
+        Gdk::Screen.default,
+        provider,
+        Gtk::StyleProvider::PRIORITY_USER
+      )
+    else
+      warn "CSS file not found: #{css_path}"
+    end
   end
 
   def on_shutdown
@@ -30,7 +51,7 @@ class WidgetsApplication < Gtk::Application
     @windows.clear
   end
 
-  def create_bar_window
-    WidgetsWindow.new(application: self)
+  def create_bar_window(monitor_name)
+    WidgetsWindow.new(application: self, monitor_name: monitor_name)
   end
 end

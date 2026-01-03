@@ -1,0 +1,195 @@
+/*
+ * Cyberpunk Neon Theme for Widgets
+ * Based on Waybar theme by cjpoll
+ *
+ * Color Palette:
+ * - Deep Dark: #0a0e27 (background)
+ * - Dark Purple: #1a1b3d (containers)
+ * - Neon Cyan: #00f3ff (primary accent)
+ * - Neon Magenta: #ff00ff (secondary accent)
+ * - Electric Blue: #599cff (highlights)
+ * - Neon Orange: #ff6b35 (hover emphasis)
+ * - Soft White: #e0e0ff (text)
+ * - Neon Green: #39ff14 (battery/success)
+ * - Yellow: #f1fa8c (warnings)
+ * - Red: #ff0066 (critical/power)
+ */
+
+/* Global defaults */
+* {
+    font-family: "Inconsolata Nerd Font Mono", "Inconsolata", "Symbols Nerd Font Mono", "JetBrains Mono", "Fira Code", monospace;
+    font-size: 14px;
+}
+
+/* Main window - transparent background */
+window {
+    background-color: transparent;
+}
+
+/* Main bar container */
+.bar-container {
+    background-color: transparent;
+    padding: 2px 0;
+}
+
+/* Section containers */
+.section-left,
+.section-center,
+.section-right {
+    margin: 2px 0;
+}
+
+/* Base pill styling - shared by all pill-shaped widgets */
+.pill,
+button.pill {
+    padding: 5px 16px;
+    margin: 2px 2px;
+    background-color: rgba(10, 14, 39, 0.85);
+    background-image: none;
+    border-radius: 9999px;
+    border: none;
+    box-shadow: none;
+    color: #e0e0ff;
+}
+
+.pill:hover,
+button.pill:hover {
+    background-color: rgba(10, 14, 39, 0.95);
+    background-image: none;
+    color: #ff6b35;
+}
+
+/* Workspace buttons */
+.workspaces {
+    background-color: transparent;
+    border: none;
+    padding: 0;
+    margin: 0;
+}
+
+.workspace-button {
+    min-width: 40px;
+}
+
+.workspace-button.active {
+    background: linear-gradient(135deg, rgba(0, 243, 255, 0.2) 0%, rgba(255, 0, 255, 0.2) 100%);
+    color: #00f3ff;
+    font-weight: bold;
+}
+
+.workspace-button.urgent {
+    background-color: rgba(241, 250, 140, 0.3);
+    color: #f1fa8c;
+}
+
+/* Launcher buttons */
+.launcher {
+    padding: 5px 10px;
+    min-width: 0;
+}
+
+/* System stats */
+.cpu {
+    color: #ff00ff;
+    font-weight: 600;
+}
+
+.memory {
+    color: #00f3ff;
+    font-weight: 600;
+}
+
+.battery {
+    color: #39ff14;
+    font-weight: 600;
+}
+
+.battery.charging { color: #00f3ff; }
+.battery.warning { color: #f1fa8c; }
+.battery.critical { color: #ff0066; }
+
+.brightness {
+    color: #f1fa8c;
+    font-weight: 600;
+}
+
+/* Audio */
+.volume {
+    color: #ff00ff;
+    font-weight: 600;
+}
+
+.volume.muted {
+    color: #599cff;
+}
+
+.audio-sink {
+    color: #00f3ff;
+    font-weight: 600;
+}
+
+/* Clock */
+.clock {
+    color: #00f3ff;
+    font-weight: 600;
+}
+
+/* Network */
+.network {
+    color: #00f3ff;
+    font-weight: 600;
+}
+
+.network.disconnected {
+    color: #f1fa8c;
+}
+
+/* Tray */
+.tray {
+    /* Uses base .pill styling */
+}
+
+/* Power controls */
+button.pill.power-button {
+    padding: 5px 12px;
+    background-color: transparent;
+}
+
+button.pill.power-button label {
+    font-size: 24px;
+}
+
+button.pill.power-button.lock { color: #f1fa8c; }
+button.pill.power-button.logout { color: #ff6b35; }
+button.pill.power-button.power { color: #ff0066; font-weight: bold; }
+
+/* Dropdown menus - Cyberpunk Neon styling */
+menu {
+    background-color: #0a0e27;
+    border: 1px solid rgba(0, 102, 255, 0.3);
+    border-radius: 8px;
+    padding: 8px 0;
+}
+
+menu menuitem {
+    padding: 8px 16px;
+    color: #e0e0ff;
+    transition: all 0.2s ease;
+}
+
+menu menuitem:hover {
+    background-color: rgba(255, 107, 53, 0.2);
+    color: #ff6b35;
+    text-shadow: 0 0 8px rgba(255, 107, 53, 0.5);
+}
+
+menu menuitem:disabled {
+    color: #00f3ff;
+    background-color: rgba(0, 243, 255, 0.1);
+    text-shadow: 0 0 8px rgba(0, 243, 255, 0.3);
+}
+
+menu menuitem label {
+    font-family: "Inconsolata Nerd Font Mono", "Inconsolata", monospace;
+    font-size: 14px;
+}
