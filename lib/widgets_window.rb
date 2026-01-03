@@ -130,6 +130,10 @@ class WidgetsWindow < Gtk::Window
     @audio_sink = Bar::UI::AudioSinkWidget.new
     @right_box.pack_start(@audio_sink, expand: false, fill: false, padding: 0)
 
+    # Network widget
+    @network = Bar::UI::NetworkWidget.new
+    @right_box.pack_start(@network, expand: false, fill: false, padding: 0)
+
     # Clock widget
     @clock = Bar::UI::ClockWidget.new
     @right_box.pack_start(@clock, expand: false, fill: false, padding: 0)

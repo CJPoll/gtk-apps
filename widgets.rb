@@ -27,6 +27,7 @@ require_relative 'lib/bar/ui/launcher_button'
 require_relative 'lib/bar/ui/launchers_widget'
 require_relative 'lib/bar/ui/volume_widget'
 require_relative 'lib/bar/ui/audio_sink_widget'
+require_relative 'lib/bar/ui/network_widget'
 require_relative 'lib/bar/ui/power_controls_widget'
 require_relative 'lib/widgets_window'
 
