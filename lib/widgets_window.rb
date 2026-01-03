@@ -1,14 +1,15 @@
 # frozen_string_literal: true
 
 class WidgetsWindow < Gtk::Window
-  BAR_HEIGHT = 48
+  BAR_HEIGHT = 40
 
   attr_reader :monitor_name
 
-  def initialize(application:, monitor_name:)
+  def initialize(application:, monitor_name:, sni_host: nil)
     super()
     set_application(application)
     @monitor_name = monitor_name
+    @sni_host = sni_host
 
     setup_layer_shell
     setup_ui
@@ -81,6 +82,7 @@ class WidgetsWindow < Gtk::Window
   def setup_left_section
     @left_box = Gtk::Box.new(:horizontal, 4)
     @left_box.style_context.add_class('section-left')
+    @left_box.valign = :center
 
     # Workspaces widget (filtered by this monitor)
     @workspaces = Bar::UI::WorkspacesWidget.new(monitor_name: @monitor_name)
@@ -97,6 +99,7 @@ class WidgetsWindow < Gtk::Window
     @center_box = Gtk::Box.new(:horizontal, 4)
     @center_box.style_context.add_class('section-center')
     @center_box.halign = :center
+    @center_box.valign = :center
 
     # Memory widget
     @memory = Bar::UI::MemoryWidget.new
@@ -121,14 +124,15 @@ class WidgetsWindow < Gtk::Window
   def setup_right_section
     @right_box = Gtk::Box.new(:horizontal, 4)
     @right_box.style_context.add_class('section-right')
-
-    # Volume widget
-    @volume = Bar::UI::VolumeWidget.new
-    @right_box.pack_start(@volume, expand: false, fill: false, padding: 0)
+    @right_box.valign = :center
 
     # Audio sink widget
     @audio_sink = Bar::UI::AudioSinkWidget.new
     @right_box.pack_start(@audio_sink, expand: false, fill: false, padding: 0)
+
+    # Volume widget
+    @volume = Bar::UI::VolumeWidget.new
+    @right_box.pack_start(@volume, expand: false, fill: false, padding: 0)
 
     # Network widget
     @network = Bar::UI::NetworkWidget.new
@@ -137,6 +141,10 @@ class WidgetsWindow < Gtk::Window
     # Clock widget
     @clock = Bar::UI::ClockWidget.new
     @right_box.pack_start(@clock, expand: false, fill: false, padding: 0)
+
+    # System tray
+    @tray = Bar::UI::TrayWidget.new(sni_host: @sni_host)
+    @right_box.pack_start(@tray, expand: false, fill: false, padding: 0)
 
     # Power controls
     @power_controls = Bar::UI::PowerControlsWidget.new

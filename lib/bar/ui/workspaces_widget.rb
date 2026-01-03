@@ -4,16 +4,19 @@ module Bar
   module UI
     class WorkspacesWidget < Gtk::Box
       UPDATE_INTERVAL_SECONDS = 1
+      PULSE_INTERVAL_MS = 750
 
       def initialize(monitor_name:)
         super(:horizontal, 0)
 
         @monitor_name = monitor_name
         @buttons = {}
+        @pulse_state = false
 
         style_context.add_class('workspaces')
         setup_ui
         start_timer
+        start_pulse_timer
       end
 
       private
@@ -26,6 +29,27 @@ module Bar
         GLib::Timeout.add_seconds(UPDATE_INTERVAL_SECONDS) do
           update_workspaces
           true # Continue timer
+        end
+      end
+
+      def start_pulse_timer
+        GLib::Timeout.add(PULSE_INTERVAL_MS) do
+          @pulse_state = !@pulse_state
+          update_pulse_states
+          true # Continue timer
+        end
+      end
+
+      def update_pulse_states
+        @buttons.each_value do |button|
+          style = button.style_context
+          next unless style.has_class?('urgent')
+
+          if @pulse_state
+            style.add_class('pulse-bright')
+          else
+            style.remove_class('pulse-bright')
+          end
         end
       end
 

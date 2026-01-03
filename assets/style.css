@@ -29,34 +29,46 @@ window {
 /* Main bar container */
 .bar-container {
     background-color: transparent;
-    padding: 2px 0;
+    padding: 0;
 }
 
 /* Section containers */
 .section-left,
 .section-center,
 .section-right {
-    margin: 2px 0;
+    margin: 0;
 }
 
 /* Base pill styling - shared by all pill-shaped widgets */
 .pill,
 button.pill {
     padding: 5px 16px;
-    margin: 2px 2px;
+    margin: 0 3px;
     background-color: rgba(10, 14, 39, 0.85);
     background-image: none;
     border-radius: 9999px;
-    border: none;
-    box-shadow: none;
+    border: 1px solid rgba(89, 156, 255, 0.1);
+    box-shadow: 0 0 4px rgba(0, 0, 0, 0.3);
     color: #e0e0ff;
+    transition: all 0.2s ease;
 }
 
 .pill:hover,
 button.pill:hover {
-    background-color: rgba(10, 14, 39, 0.95);
+    background-color: rgba(20, 24, 50, 0.95);
     background-image: none;
     color: #ff6b35;
+    border: 1px solid rgba(255, 107, 53, 0.5);
+    box-shadow: 0 0 20px rgba(255, 107, 53, 0.4),
+                0 0 40px rgba(255, 107, 53, 0.2),
+                inset 0 0 15px rgba(255, 107, 53, 0.1);
+    text-shadow: 0 0 10px rgba(255, 107, 53, 0.8);
+}
+
+.pill:hover label,
+button.pill:hover label {
+    color: #ff6b35;
+    text-shadow: 0 0 10px rgba(255, 107, 53, 0.8);
 }
 
 /* Workspace buttons */
@@ -69,84 +81,167 @@ button.pill:hover {
 
 .workspace-button {
     min-width: 40px;
+    padding: 4px 16px;
+    transition: all 0.2s ease;
 }
 
 .workspace-button.active {
     background: linear-gradient(135deg, rgba(0, 243, 255, 0.2) 0%, rgba(255, 0, 255, 0.2) 100%);
     color: #00f3ff;
     font-weight: bold;
+    text-shadow: 0 0 10px rgba(0, 243, 255, 0.7);
+    border: 1px solid rgba(0, 243, 255, 0.3);
+    box-shadow: 0 0 12px rgba(0, 243, 255, 0.2);
 }
 
 .workspace-button.urgent {
-    background-color: rgba(241, 250, 140, 0.3);
+    background-color: rgba(241, 250, 140, 0.2);
     color: #f1fa8c;
+    text-shadow: 0 0 8px rgba(241, 250, 140, 0.5);
+    box-shadow: 0 0 8px rgba(241, 250, 140, 0.3);
+    border: 1px solid rgba(241, 250, 140, 0.3);
+    transition: all 0.3s ease;
 }
 
-/* Launcher buttons */
+.workspace-button.urgent.pulse-bright {
+    background-color: rgba(241, 250, 140, 0.4);
+    text-shadow: 0 0 15px rgba(241, 250, 140, 0.9);
+    box-shadow: 0 0 18px rgba(241, 250, 140, 0.6);
+    border: 1px solid rgba(241, 250, 140, 0.6);
+}
+
+/* Launchers container */
+.launchers {
+    padding: 2px 6px;
+}
+
+/* Individual launcher buttons inside the pill */
 .launcher {
-    padding: 5px 10px;
-    min-width: 0;
+    padding: 4px;
+    margin: 0;
+    min-width: 28px;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.launcher:hover {
+    background-color: rgba(255, 107, 53, 0.2);
 }
 
 /* System stats */
-.cpu {
+.cpu,
+.cpu label {
     color: #ff00ff;
     font-weight: 600;
+    text-shadow: 0 0 8px rgba(255, 0, 255, 0.4);
 }
 
-.memory {
+.memory,
+.memory label {
     color: #00f3ff;
     font-weight: 600;
+    text-shadow: 0 0 8px rgba(0, 243, 255, 0.4);
 }
 
-.battery {
+.battery,
+.battery label {
     color: #39ff14;
     font-weight: 600;
+    text-shadow: 0 0 8px rgba(57, 255, 20, 0.4);
 }
 
-.battery.charging { color: #00f3ff; }
-.battery.warning { color: #f1fa8c; }
-.battery.critical { color: #ff0066; }
+.battery.charging,
+.battery.charging label {
+    color: #00f3ff;
+    text-shadow: 0 0 8px rgba(0, 243, 255, 0.4);
+}
+.battery.warning,
+.battery.warning label {
+    color: #f1fa8c;
+    text-shadow: 0 0 8px rgba(241, 250, 140, 0.4);
+}
+.battery.critical,
+.battery.critical label {
+    color: #ff0066;
+    text-shadow: 0 0 10px rgba(255, 0, 102, 0.5);
+    box-shadow: 0 0 8px rgba(255, 0, 102, 0.3);
+    border: 1px solid rgba(255, 0, 102, 0.3);
+    transition: all 0.25s ease;
+}
 
-.brightness {
+.battery.critical.pulse-bright,
+.battery.critical.pulse-bright label {
+    text-shadow: 0 0 18px rgba(255, 0, 102, 0.9);
+    box-shadow: 0 0 15px rgba(255, 0, 102, 0.5);
+    border: 1px solid rgba(255, 0, 102, 0.6);
+}
+
+.brightness,
+.brightness label {
     color: #f1fa8c;
     font-weight: 600;
+    text-shadow: 0 0 8px rgba(241, 250, 140, 0.4);
 }
 
 /* Audio */
-.volume {
+.volume,
+.volume label {
     color: #ff00ff;
     font-weight: 600;
+    text-shadow: 0 0 8px rgba(255, 0, 255, 0.4);
 }
 
-.volume.muted {
+.volume.muted,
+.volume.muted label {
     color: #599cff;
+    text-shadow: 0 0 8px rgba(89, 156, 255, 0.4);
 }
 
-.audio-sink {
+.audio-sink,
+.audio-sink label {
     color: #00f3ff;
     font-weight: 600;
+    text-shadow: 0 0 8px rgba(0, 243, 255, 0.4);
 }
 
 /* Clock */
-.clock {
-    color: #00f3ff;
+.clock,
+.clock label {
+    color: #ff00ff;
     font-weight: 600;
+    text-shadow: 0 0 8px rgba(255, 0, 255, 0.4);
 }
 
 /* Network */
-.network {
+.network,
+.network label {
     color: #00f3ff;
     font-weight: 600;
+    text-shadow: 0 0 8px rgba(0, 243, 255, 0.4);
 }
 
-.network.disconnected {
+.network.disconnected,
+.network.disconnected label {
     color: #f1fa8c;
+    text-shadow: 0 0 8px rgba(241, 250, 140, 0.4);
 }
 
 /* Tray */
 .tray {
     /* Uses base .pill styling */
+}
+
+.tray-item {
+    padding: 4px;
+    margin: 0 2px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.tray-item:hover {
+    background-color: rgba(255, 107, 53, 0.2);
 }
 
 /* Power controls */
@@ -157,11 +252,33 @@ button.pill.power-button {
 
 button.pill.power-button label {
     font-size: 24px;
+    transition: all 0.2s ease;
 }
 
-button.pill.power-button.lock { color: #f1fa8c; }
-button.pill.power-button.logout { color: #ff6b35; }
-button.pill.power-button.power { color: #ff0066; font-weight: bold; }
+button.pill.power-button.lock label {
+    color: #f1fa8c;
+    text-shadow: 0 0 8px rgba(241, 250, 140, 0.4);
+}
+button.pill.power-button.lock:hover label {
+    text-shadow: 0 0 15px rgba(241, 250, 140, 0.8);
+}
+
+button.pill.power-button.logout label {
+    color: #ff6b35;
+    text-shadow: 0 0 8px rgba(255, 107, 53, 0.4);
+}
+button.pill.power-button.logout:hover label {
+    text-shadow: 0 0 15px rgba(255, 107, 53, 0.8);
+}
+
+button.pill.power-button.power label {
+    color: #ff0066;
+    font-weight: bold;
+    text-shadow: 0 0 8px rgba(255, 0, 102, 0.4);
+}
+button.pill.power-button.power:hover label {
+    text-shadow: 0 0 15px rgba(255, 0, 102, 0.8);
+}
 
 /* Dropdown menus - Cyberpunk Neon styling */
 menu {
@@ -192,4 +309,22 @@ menu menuitem:disabled {
 menu menuitem label {
     font-family: "Inconsolata Nerd Font Mono", "Inconsolata", monospace;
     font-size: 14px;
+}
+
+/* Tooltips - Cyberpunk Neon styling */
+tooltip,
+tooltip.background {
+    background-color: rgba(10, 14, 39, 0.95);
+    border: 1px solid rgba(0, 243, 255, 0.4);
+    border-radius: 6px;
+    box-shadow: 0 0 15px rgba(0, 243, 255, 0.3),
+                inset 0 0 20px rgba(0, 243, 255, 0.05);
+}
+
+tooltip label {
+    color: #e0e0ff;
+    font-family: "Inconsolata Nerd Font Mono", "Inconsolata", monospace;
+    font-size: 13px;
+    padding: 6px 10px;
+    text-shadow: 0 0 5px rgba(224, 224, 255, 0.3);
 }

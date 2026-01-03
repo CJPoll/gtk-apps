@@ -19,11 +19,11 @@ module Bar
       private
 
       def setup_ui
-        @label = Gtk::Label.new('')
-        @label.style_context.add_class('pill')
-        @label.style_context.add_class('cpu')
+        @button = Gtk::Button.new(label: '')
+        @button.style_context.add_class('pill')
+        @button.style_context.add_class('cpu')
 
-        pack_start(@label, expand: false, fill: false, padding: 0)
+        pack_start(@button, expand: false, fill: false, padding: 0)
       end
 
       def start_timer
@@ -35,8 +35,8 @@ module Bar
 
       def update_display
         usage = calculate_cpu_usage
-        @label.text = "#{usage}% CPU"
-        @label.set_tooltip_text("CPU Usage: #{usage}%")
+        @button.label = "#{usage}% CPU"
+        @button.set_tooltip_text("CPU Usage: #{usage}%")
       end
 
       def calculate_cpu_usage

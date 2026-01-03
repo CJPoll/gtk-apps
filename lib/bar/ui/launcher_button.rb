@@ -17,7 +17,6 @@ module Bar
       private
 
       def setup_ui
-        style_context.add_class('pill')
         style_context.add_class('launcher')
 
         icon = create_icon

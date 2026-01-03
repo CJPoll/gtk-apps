@@ -9,11 +9,11 @@ module Bar
       def initialize
         super
 
-        @label = Gtk::Label.new('')
-        @label.style_context.add_class('pill')
-        @label.style_context.add_class('volume')
+        @button = Gtk::Button.new(label: '')
+        @button.style_context.add_class('pill')
+        @button.style_context.add_class('volume')
 
-        add(@label)
+        add(@button)
 
         setup_events
         update_display
@@ -25,9 +25,8 @@ module Bar
       def setup_events
         add_events(Gdk::EventMask::SCROLL_MASK)
 
-        signal_connect('button-press-event') do |_widget, event|
-          toggle_mute if event.button == 1
-          true
+        @button.signal_connect('clicked') do
+          toggle_mute
         end
 
         signal_connect('scroll-event') do |_widget, event|
@@ -53,14 +52,14 @@ module Bar
         muted = muted?
 
         if muted
-          @label.text = '󰝟 Muted'
-          @label.style_context.add_class('muted')
+          @button.label = '󰝟 Muted'
+          @button.style_context.add_class('muted')
         else
-          @label.text = "󰕾 #{volume}%"
-          @label.style_context.remove_class('muted')
+          @button.label = "󰕾 #{volume}%"
+          @button.style_context.remove_class('muted')
         end
 
-        @label.set_tooltip_text("Volume: #{volume}%#{muted ? ' (Muted)' : ''}\nClick to toggle mute\nScroll to adjust")
+        @button.set_tooltip_text("Volume: #{volume}%#{muted ? ' (Muted)' : ''}\nClick to toggle mute\nScroll to adjust")
       end
 
       def get_volume

@@ -19,11 +19,11 @@ module Bar
       private
 
       def setup_ui
-        @label = Gtk::Label.new('')
-        @label.style_context.add_class('pill')
-        @label.style_context.add_class('brightness')
+        @button = Gtk::Button.new(label: '')
+        @button.style_context.add_class('pill')
+        @button.style_context.add_class('brightness')
 
-        pack_start(@label, expand: false, fill: false, padding: 0)
+        pack_start(@button, expand: false, fill: false, padding: 0)
       end
 
       def start_timer
@@ -39,8 +39,8 @@ module Bar
         return hide_widget if data['class'] == 'hidden'
 
         show
-        @label.text = data['text']
-        @label.set_tooltip_text(data['tooltip']&.gsub('\\n', "\n"))
+        @button.label = data['text']
+        @button.set_tooltip_text(data['tooltip']&.gsub('\\n', "\n"))
       end
 
       def hide_widget

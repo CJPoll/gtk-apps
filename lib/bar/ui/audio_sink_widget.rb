@@ -8,11 +8,11 @@ module Bar
       def initialize
         super
 
-        @label = Gtk::Label.new('')
-        @label.style_context.add_class('pill')
-        @label.style_context.add_class('audio-sink')
+        @button = Gtk::Button.new(label: '')
+        @button.style_context.add_class('pill')
+        @button.style_context.add_class('audio-sink')
 
-        add(@label)
+        add(@button)
 
         setup_events
         update_display
@@ -22,7 +22,7 @@ module Bar
       private
 
       def setup_events
-        signal_connect('button-press-event') do |_widget, event|
+        @button.signal_connect('button-press-event') do |_widget, event|
           show_sink_picker(event) if event.button == 1
           true
         end
@@ -42,8 +42,8 @@ module Bar
         icon = get_sink_icon(current_sink[:name])
         short = short_name(current_sink[:name])
 
-        @label.text = "#{icon} #{short}"
-        @label.set_tooltip_text("Audio: #{current_sink[:name]}")
+        @button.label = "#{icon} #{short}"
+        @button.set_tooltip_text("Audio: #{current_sink[:name]}")
       end
 
       def show_sink_picker(event)

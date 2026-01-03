@@ -10,10 +10,14 @@ module Bar
         slack
         steam
         pyrope
+        beryl
       ].freeze
 
       def initialize
         super(:horizontal, 0)
+
+        style_context.add_class('pill')
+        style_context.add_class('launchers')
 
         setup_ui
       end

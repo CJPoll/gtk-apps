@@ -8,12 +8,12 @@ module Bar
       def initialize
         super
 
-        @label = Gtk::Label.new('')
-        @label.style_context.add_class('pill')
-        @label.style_context.add_class('network')
+        @button = Gtk::Button.new(label: '')
+        @button.style_context.add_class('pill')
+        @button.style_context.add_class('network')
         @wifi_interface = find_wifi_interface
 
-        add(@label)
+        add(@button)
 
         setup_events
         update_display
@@ -23,7 +23,7 @@ module Bar
       private
 
       def setup_events
-        signal_connect('button-press-event') do |_widget, event|
+        @button.signal_connect('button-press-event') do |_widget, event|
           show_network_menu(event) if event.button == 1
           true
         end
@@ -134,8 +134,8 @@ module Bar
         return unless @wifi_interface
 
         # Show connecting state immediately
-        @label.text = "󰤫 Connecting..."
-        @label.set_tooltip_text("Connecting to #{ssid}...")
+        @button.label = "󰤫 Connecting..."
+        @button.set_tooltip_text("Connecting to #{ssid}...")
 
         Thread.new do
           # Check if network is already configured
@@ -201,18 +201,18 @@ module Bar
 
         if status[:connected]
           icon = status[:type] == :wifi ? wifi_icon(status[:signal]) : '󰈀'
-          @label.text = "#{icon} #{status[:name]}"
-          @label.style_context.remove_class('disconnected')
+          @button.label = "#{icon} #{status[:name]}"
+          @button.style_context.remove_class('disconnected')
 
           tooltip = "#{status[:type] == :wifi ? 'WiFi' : 'Ethernet'}: #{status[:name]}"
           tooltip += "\nFrequency: #{status[:frequency]}" if status[:frequency]
           tooltip += "\nSignal: #{status[:signal]}%" if status[:signal]
           tooltip += "\nIP: #{status[:ip]}" if status[:ip]
-          @label.set_tooltip_text(tooltip)
+          @button.set_tooltip_text(tooltip)
         else
-          @label.text = '󰌙 Disconnected'
-          @label.style_context.add_class('disconnected')
-          @label.set_tooltip_text('No network connection')
+          @button.label = '󰌙 Disconnected'
+          @button.style_context.add_class('disconnected')
+          @button.set_tooltip_text('No network connection')
         end
       end
 
