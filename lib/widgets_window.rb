@@ -10,9 +10,10 @@ class WidgetsWindow < Gtk::Window
     set_application(application)
     @monitor_name = monitor_name
     @sni_host = sni_host
+    @widgets_populated = false
 
     setup_layer_shell
-    setup_ui
+    setup_ui_shell
     setup_signals
 
     show_all
@@ -66,95 +67,67 @@ class WidgetsWindow < Gtk::Window
     end
   end
 
-  def setup_ui
+  def setup_ui_shell
     set_default_size(-1, BAR_HEIGHT)
 
     @main_box = Gtk::Box.new(:horizontal, 4)
     @main_box.style_context.add_class('bar-container')
 
-    setup_left_section
-    setup_center_section
-    setup_right_section
-
-    add(@main_box)
-  end
-
-  def setup_left_section
+    # Create section containers (lightweight, no widgets yet)
     @left_box = Gtk::Box.new(:horizontal, 4)
     @left_box.style_context.add_class('section-left')
     @left_box.valign = :center
 
-    # Workspaces widget (filtered by this monitor)
-    @workspaces = Bar::UI::WorkspacesWidget.new(monitor_name: @monitor_name)
-    @left_box.pack_start(@workspaces, expand: false, fill: false, padding: 0)
-
-    # App launchers
-    @launchers = Bar::UI::LaunchersWidget.new
-    @left_box.pack_start(@launchers, expand: false, fill: false, padding: 0)
-
-    @main_box.pack_start(@left_box, expand: false, fill: false, padding: 0)
-  end
-
-  def setup_center_section
     @center_box = Gtk::Box.new(:horizontal, 4)
     @center_box.style_context.add_class('section-center')
     @center_box.halign = :center
     @center_box.valign = :center
 
-    # Memory widget
-    @memory = Bar::UI::MemoryWidget.new
-    @center_box.pack_start(@memory, expand: false, fill: false, padding: 0)
-
-    # CPU widget
-    @cpu = Bar::UI::CpuWidget.new
-    @center_box.pack_start(@cpu, expand: false, fill: false, padding: 0)
-
-    # Battery widget (auto-hides on desktop)
-    @battery = Bar::UI::BatteryWidget.new
-    @center_box.pack_start(@battery, expand: false, fill: false, padding: 0)
-
-    # Brightness widget (auto-hides on desktop)
-    @brightness = Bar::UI::BrightnessWidget.new
-    @center_box.pack_start(@brightness, expand: false, fill: false, padding: 0)
-
-    # Center the box by expanding but not filling
-    @main_box.set_center_widget(@center_box)
-  end
-
-  def setup_right_section
     @right_box = Gtk::Box.new(:horizontal, 4)
     @right_box.style_context.add_class('section-right')
     @right_box.valign = :center
 
-    # Audio sink widget
-    @audio_sink = Bar::UI::AudioSinkWidget.new
-    @right_box.pack_start(@audio_sink, expand: false, fill: false, padding: 0)
-
-    # Volume widget
-    @volume = Bar::UI::VolumeWidget.new
-    @right_box.pack_start(@volume, expand: false, fill: false, padding: 0)
-
-    # Network widget
-    @network = Bar::UI::NetworkWidget.new
-    @right_box.pack_start(@network, expand: false, fill: false, padding: 0)
-
-    # Clock widget
-    @clock = Bar::UI::ClockWidget.new
-    @right_box.pack_start(@clock, expand: false, fill: false, padding: 0)
-
-    # System tray
-    @tray = Bar::UI::TrayWidget.new(sni_host: @sni_host)
-    @right_box.pack_start(@tray, expand: false, fill: false, padding: 0)
-
-    # Power controls
-    @power_controls = Bar::UI::PowerControlsWidget.new
-    @right_box.pack_start(@power_controls, expand: false, fill: false, padding: 0)
-
+    @main_box.pack_start(@left_box, expand: false, fill: false, padding: 0)
+    @main_box.set_center_widget(@center_box)
     @main_box.pack_end(@right_box, expand: false, fill: false, padding: 0)
+
+    add(@main_box)
+  end
+
+  def populate_widgets
+    # Left section
+    add_widget(@left_box, Bar::UI::WorkspacesWidget.new(monitor_name: @monitor_name))
+
+    # Center section
+    add_widget(@center_box, Bar::UI::MemoryWidget.new)
+    add_widget(@center_box, Bar::UI::CpuWidget.new)
+    add_widget(@center_box, Bar::UI::BatteryWidget.new)
+    add_widget(@center_box, Bar::UI::BrightnessWidget.new)
+
+    # Right section
+    add_widget(@right_box, Bar::UI::AudioSinkWidget.new)
+    add_widget(@right_box, Bar::UI::VolumeWidget.new)
+    add_widget(@right_box, Bar::UI::NetworkWidget.new)
+    add_widget(@right_box, Bar::UI::ClockWidget.new)
+    add_widget(@right_box, Bar::UI::TrayWidget.new(sni_host: @sni_host))
+    add_widget(@right_box, Bar::UI::PowerControlsWidget.new)
+  end
+
+  def add_widget(container, widget)
+    container.pack_start(widget, expand: false, fill: false, padding: 0)
+    widget.show_all
   end
 
   def setup_signals
     signal_connect('destroy') { on_destroy }
+    signal_connect('map') { on_map }
+  end
+
+  def on_map
+    return if @widgets_populated
+
+    @widgets_populated = true
+    populate_widgets
   end
 
   def on_destroy

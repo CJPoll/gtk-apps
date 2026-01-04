@@ -1,0 +1,5 @@
+#! /usr/bin/env bash
+
+export PATH="${ASDF_DATA_DIR:-/home/cjpoll/.asdf}/shims:/home/cjpoll/bin/:$PATH"
+cd ~/dev/widgets
+bundle exec ruby launcher.rb "${@}"

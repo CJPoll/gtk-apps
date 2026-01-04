@@ -48,10 +48,12 @@ module Bar
       end
 
       def fetch_data
-        return nil unless File.executable?(SCRIPT_PATH)
+        Bar::Managers::SharedState.instance.fetch(:brightness_data) do
+          next nil unless File.executable?(SCRIPT_PATH)
 
-        output = `#{SCRIPT_PATH}`.strip
-        JSON.parse(output)
+          output = `#{SCRIPT_PATH}`.strip
+          JSON.parse(output)
+        end
       rescue JSON::ParserError, Errno::ENOENT => e
         warn "BrightnessWidget: #{e.message}"
         nil

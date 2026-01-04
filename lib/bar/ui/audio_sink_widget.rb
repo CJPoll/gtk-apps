@@ -72,6 +72,12 @@ module Bar
       end
 
       def get_current_sink
+        Bar::Managers::SharedState.instance.fetch(:current_audio_sink) do
+          parse_current_sink
+        end
+      end
+
+      def parse_current_sink
         output = `wpctl status 2>/dev/null`
         in_audio = false
         in_sinks = false
@@ -126,6 +132,7 @@ module Bar
 
       def set_default_sink(sink_id)
         system('wpctl', 'set-default', sink_id.to_s)
+        Bar::Managers::SharedState.instance.invalidate(:current_audio_sink)
       end
 
       def get_sink_icon(sink_name)

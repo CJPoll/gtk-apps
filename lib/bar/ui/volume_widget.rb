@@ -63,29 +63,41 @@ module Bar
       end
 
       def get_volume
-        output = `pactl get-sink-volume @DEFAULT_SINK@ 2>/dev/null`.strip
-        match = output.match(/(\d+)%/)
-        match ? match[1].to_i : 0
+        Bar::Managers::SharedState.instance.fetch(:volume_level) do
+          output = `pactl get-sink-volume @DEFAULT_SINK@ 2>/dev/null`.strip
+          match = output.match(/(\d+)%/)
+          match ? match[1].to_i : 0
+        end
       rescue Errno::ENOENT
         0
       end
 
       def muted?
-        output = `pactl get-sink-mute @DEFAULT_SINK@ 2>/dev/null`.strip
-        output.include?('yes')
+        Bar::Managers::SharedState.instance.fetch(:volume_muted) do
+          output = `pactl get-sink-mute @DEFAULT_SINK@ 2>/dev/null`.strip
+          output.include?('yes')
+        end
       rescue Errno::ENOENT
         false
       end
 
       def toggle_mute
         system('pactl', 'set-sink-mute', '@DEFAULT_SINK@', 'toggle')
+        invalidate_cache
         update_display
       end
 
       def adjust_volume(delta)
         sign = delta.positive? ? '+' : ''
         system('pactl', 'set-sink-volume', '@DEFAULT_SINK@', "#{sign}#{delta}%")
+        invalidate_cache
         update_display
+      end
+
+      def invalidate_cache
+        state = Bar::Managers::SharedState.instance
+        state.invalidate(:volume_level)
+        state.invalidate(:volume_muted)
       end
     end
   end
