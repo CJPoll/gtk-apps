@@ -5,6 +5,8 @@ require 'json'
 module Bar
   module UI
     class MemoryWidget < Gtk::Box
+      include WidgetTimers
+
       SCRIPT_PATH = File.expand_path('~/dev/custom/scripts/waybar-memory-procs')
       UPDATE_INTERVAL_SECONDS = 5
 
@@ -27,10 +29,7 @@ module Bar
       end
 
       def start_timer
-        GLib::Timeout.add_seconds(UPDATE_INTERVAL_SECONDS) do
-          update_display
-          true # Continue timer
-        end
+        every_seconds(UPDATE_INTERVAL_SECONDS) { update_display }
       end
 
       def update_display

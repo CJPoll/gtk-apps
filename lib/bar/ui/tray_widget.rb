@@ -3,6 +3,8 @@
 module Bar
   module UI
     class TrayWidget < Gtk::Box
+      include WidgetTimers
+
       ICON_SIZE = 18
 
       def initialize(sni_host: nil)
@@ -248,10 +250,7 @@ module Bar
           nil,
           Gio::DBusSignalFlags::NONE
         ) do |_conn, _sender, _path, _iface, _signal, _params|
-          GLib::Idle.add do
-            update_item_icon(image, item)
-            false
-          end
+          on_main_thread { update_item_icon(image, item) }
         end
         @signal_subscriptions[key] << sub_id
 
@@ -264,10 +263,7 @@ module Bar
           nil,
           Gio::DBusSignalFlags::NONE
         ) do |_conn, _sender, _path, _iface, _signal, _params|
-          GLib::Idle.add do
-            update_item_tooltip(button, item)
-            false
-          end
+          on_main_thread { update_item_tooltip(button, item) }
         end
         @signal_subscriptions[key] << sub_id
 
@@ -280,10 +276,7 @@ module Bar
           nil,
           Gio::DBusSignalFlags::NONE
         ) do |_conn, _sender, _path, _iface, _signal, _params|
-          GLib::Idle.add do
-            update_item_icon(image, item)
-            false
-          end
+          on_main_thread { update_item_icon(image, item) }
         end
         @signal_subscriptions[key] << sub_id
 
@@ -296,10 +289,7 @@ module Bar
           nil,
           Gio::DBusSignalFlags::NONE
         ) do |_conn, _sender, _path, _iface, _signal, _params|
-          GLib::Idle.add do
-            update_item_icon(image, item)
-            false
-          end
+          on_main_thread { update_item_icon(image, item) }
         end
         @signal_subscriptions[key] << sub_id
 
@@ -312,10 +302,7 @@ module Bar
           nil,
           Gio::DBusSignalFlags::NONE
         ) do |_conn, _sender, _path, _iface, _signal, _params|
-          GLib::Idle.add do
-            update_item_icon(image, item)
-            false
-          end
+          on_main_thread { update_item_icon(image, item) }
         end
         @signal_subscriptions[key] << sub_id
 
@@ -328,10 +315,7 @@ module Bar
           nil,
           Gio::DBusSignalFlags::NONE
         ) do |_conn, _sender, _path, _iface, _signal, _params|
-          GLib::Idle.add do
-            update_item_tooltip(button, item)
-            false
-          end
+          on_main_thread { update_item_tooltip(button, item) }
         end
         @signal_subscriptions[key] << sub_id
       end

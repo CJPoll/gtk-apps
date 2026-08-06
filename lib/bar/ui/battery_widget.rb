@@ -5,6 +5,8 @@ require 'json'
 module Bar
   module UI
     class BatteryWidget < Gtk::Box
+      include WidgetTimers
+
       SCRIPT_PATH = File.expand_path('~/dev/custom/scripts/waybar-battery')
       UPDATE_INTERVAL_SECONDS = 10
       PULSE_INTERVAL_MS = 600
@@ -32,17 +34,13 @@ module Bar
       end
 
       def start_timer
-        GLib::Timeout.add_seconds(UPDATE_INTERVAL_SECONDS) do
-          update_display
-          true # Continue timer
-        end
+        every_seconds(UPDATE_INTERVAL_SECONDS) { update_display }
       end
 
       def start_pulse_timer
-        GLib::Timeout.add(PULSE_INTERVAL_MS) do
+        every_ms(PULSE_INTERVAL_MS) do
           @pulse_state = !@pulse_state
           update_pulse_state
-          true # Continue timer
         end
       end
 

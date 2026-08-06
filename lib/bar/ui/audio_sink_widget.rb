@@ -3,6 +3,8 @@
 module Bar
   module UI
     class AudioSinkWidget < Gtk::EventBox
+      include WidgetTimers
+
       UPDATE_INTERVAL_SECONDS = 2
 
       def initialize
@@ -29,10 +31,7 @@ module Bar
       end
 
       def start_timer
-        GLib::Timeout.add_seconds(UPDATE_INTERVAL_SECONDS) do
-          update_display
-          true
-        end
+        every_seconds(UPDATE_INTERVAL_SECONDS) { update_display }
       end
 
       def update_display
@@ -60,7 +59,11 @@ module Bar
           end
 
           item.signal_connect('activate') do
-            set_default_sink(sink[:id])
+            if bluetooth_sink?(sink[:name])
+              switch_to_a2dp
+            else
+              set_default_sink(sink[:id])
+            end
             update_display
           end
 
@@ -132,7 +135,73 @@ module Bar
 
       def set_default_sink(sink_id)
         system('wpctl', 'set-default', sink_id.to_s)
+
+        # set-default only routes *new* streams; anything already playing stays
+        # on the old sink until it is moved explicitly.
+        sink_name = sink_name_for(sink_id)
+        move_sink_inputs(sink_name) if sink_name
+
         Bar::Managers::SharedState.instance.invalidate(:current_audio_sink)
+      end
+
+      # wpctl node ids and pactl sink indices are separate id spaces, so the
+      # node id cannot be handed to pactl directly. node.name is shared by both.
+      def sink_name_for(sink_id)
+        output = `wpctl inspect #{sink_id} 2>/dev/null`
+        match = output.match(/node\.name\s*=\s*"([^"]+)"/)
+        match && match[1]
+      rescue Errno::ENOENT
+        nil
+      end
+
+      def bluetooth_sink?(sink_name)
+        sink_name.to_s.match?(/WH-1000XM5|bluez|Bluetooth/i)
+      end
+
+      def switch_to_a2dp
+        card_name = find_bluez_card
+        return unless card_name
+
+        system('pactl', 'set-card-profile', card_name, 'a2dp-sink')
+        sink_name = find_bluez_sink
+        return unless sink_name
+
+        system('pactl', 'set-default-sink', sink_name)
+        move_sink_inputs(sink_name)
+        Bar::Managers::SharedState.instance.invalidate(:current_audio_sink)
+      end
+
+      def find_bluez_card
+        output = `pactl list cards short 2>/dev/null`
+        output.each_line do |line|
+          name = line.split[1]
+          return name if name&.start_with?('bluez_card.')
+        end
+        nil
+      end
+
+      def find_bluez_sink
+        output = `pactl list sinks short 2>/dev/null`
+        output.each_line do |line|
+          name = line.split[1]
+          return name if name&.start_with?('bluez_output.')
+        end
+        nil
+      end
+
+      def move_sink_inputs(sink_name)
+        output = `pactl list sink-inputs short 2>/dev/null`
+        output.each_line do |line|
+          input_id = line.split[0]
+          next unless input_id
+
+          # Streams created with node.dont-reconnect (Steam, some games) refuse
+          # to move for their entire lifetime. Skip past them quietly rather
+          # than logging a failure on every sink switch.
+          system('pactl', 'move-sink-input', input_id, sink_name, err: File::NULL)
+        end
+      rescue Errno::ENOENT
+        nil
       end
 
       def get_sink_icon(sink_name)

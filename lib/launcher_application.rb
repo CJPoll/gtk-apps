@@ -4,7 +4,9 @@ class LauncherApplication < Gtk::Application
   def initialize
     super('com.example.launcher', Gio::ApplicationFlags::FLAGS_NONE)
     @window = nil
+    @dock_visible = true
     setup_signals
+    setup_unix_signals
   end
 
   private
@@ -13,6 +15,23 @@ class LauncherApplication < Gtk::Application
     signal_connect('activate') { on_activate }
     signal_connect('startup') { on_startup }
     signal_connect('shutdown') { on_shutdown }
+  end
+
+  def setup_unix_signals
+    # SIGUSR1: Toggle dock visibility
+    Signal.trap('USR1') do
+      GLib::Idle.add do
+        toggle_visibility
+        false
+      end
+    end
+  end
+
+  def toggle_visibility
+    return unless @window && !@window.destroyed?
+
+    @dock_visible = !@dock_visible
+    @dock_visible ? @window.show : @window.hide
   end
 
   def on_activate

@@ -46,25 +46,10 @@ class WidgetsWindow < Gtk::Window
   end
 
   def set_monitor_by_name(name)
-    # Get Hyprland's monitor info to find geometry
-    hypr_monitors = Compositor::Adapters::HyprlandIpc.monitors
-    hypr_monitor = hypr_monitors.find { |m| m['name'] == name }
-    return unless hypr_monitor
+    gdk_monitor = Compositor::Adapters::GdkMonitors.find_by_name(name)
+    return unless gdk_monitor
 
-    hypr_x = hypr_monitor['x']
-    hypr_y = hypr_monitor['y']
-
-    # Find GDK monitor with matching geometry position
-    display = Gdk::Display.default
-    display.n_monitors.times do |i|
-      gdk_monitor = display.get_monitor(i)
-      geom = gdk_monitor.geometry
-
-      if geom.x == hypr_x && geom.y == hypr_y
-        GtkLayerShell.set_monitor(self, gdk_monitor)
-        return
-      end
-    end
+    GtkLayerShell.set_monitor(self, gdk_monitor)
   end
 
   def setup_ui_shell
@@ -97,6 +82,8 @@ class WidgetsWindow < Gtk::Window
   def populate_widgets
     # Left section
     add_widget(@left_box, Bar::UI::WorkspacesWidget.new(monitor_name: @monitor_name))
+    add_widget(@left_box, Bar::UI::VolumeWidget.new)
+    add_widget(@left_box, Bar::UI::AudioSinkWidget.new)
 
     # Center section
     add_widget(@center_box, Bar::UI::MemoryWidget.new)
@@ -105,8 +92,6 @@ class WidgetsWindow < Gtk::Window
     add_widget(@center_box, Bar::UI::BrightnessWidget.new)
 
     # Right section
-    add_widget(@right_box, Bar::UI::AudioSinkWidget.new)
-    add_widget(@right_box, Bar::UI::VolumeWidget.new)
     add_widget(@right_box, Bar::UI::NetworkWidget.new)
     add_widget(@right_box, Bar::UI::ClockWidget.new)
     add_widget(@right_box, Bar::UI::TrayWidget.new(sni_host: @sni_host))

@@ -3,6 +3,8 @@
 module Bar
   module UI
     class VolumeWidget < Gtk::EventBox
+      include WidgetTimers
+
       UPDATE_INTERVAL_SECONDS = 1
       VOLUME_STEP = 5
 
@@ -41,10 +43,7 @@ module Bar
       end
 
       def start_timer
-        GLib::Timeout.add_seconds(UPDATE_INTERVAL_SECONDS) do
-          update_display
-          true
-        end
+        every_seconds(UPDATE_INTERVAL_SECONDS) { update_display }
       end
 
       def update_display

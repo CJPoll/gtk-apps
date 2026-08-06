@@ -3,6 +3,8 @@
 module Bar
   module UI
     class CpuWidget < Gtk::Box
+      include WidgetTimers
+
       UPDATE_INTERVAL_SECONDS = 2
 
       def initialize
@@ -27,10 +29,7 @@ module Bar
       end
 
       def start_timer
-        GLib::Timeout.add_seconds(UPDATE_INTERVAL_SECONDS) do
-          update_display
-          true # Continue timer
-        end
+        every_seconds(UPDATE_INTERVAL_SECONDS) { update_display }
       end
 
       def update_display

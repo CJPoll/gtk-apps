@@ -3,6 +3,8 @@
 module Bar
   module UI
     class NetworkWidget < Gtk::EventBox
+      include WidgetTimers
+
       UPDATE_INTERVAL_SECONDS = 5
 
       def initialize
@@ -84,11 +86,7 @@ module Bar
           `wpa_cli -i #{@wifi_interface} scan 2>/dev/null`
           sleep 2 # Wait for scan to complete
 
-          # Update UI on main thread
-          GLib::Idle.add do
-            update_display
-            false
-          end
+          on_main_thread { update_display }
         end
       end
 
@@ -168,11 +166,7 @@ module Bar
             warn "Network '#{ssid}' not configured. Add it to wpa_supplicant.conf first."
           end
 
-          # Update UI on main thread
-          GLib::Idle.add do
-            update_display
-            false
-          end
+          on_main_thread { update_display }
         end
       end
 
@@ -183,17 +177,11 @@ module Bar
                     pgroup: true, [:out, :err] => '/dev/null')
         Process.detach(pid)
 
-        GLib::Timeout.add(1000) do
-          update_display
-          false
-        end
+        after_ms(1000) { update_display }
       end
 
       def start_timer
-        GLib::Timeout.add_seconds(UPDATE_INTERVAL_SECONDS) do
-          update_display
-          true
-        end
+        every_seconds(UPDATE_INTERVAL_SECONDS) { update_display }
       end
 
       def update_display
@@ -201,7 +189,7 @@ module Bar
 
         if status[:connected]
           icon = status[:type] == :wifi ? wifi_icon(status[:signal]) : '󰈀'
-          @button.label = "#{icon} #{status[:name]}"
+          @button.label = icon
           @button.style_context.remove_class('disconnected')
 
           tooltip = "#{status[:type] == :wifi ? 'WiFi' : 'Ethernet'}: #{status[:name]}"

@@ -3,6 +3,8 @@
 module Bar
   module UI
     class ClockWidget < Gtk::Box
+      include WidgetTimers
+
       FORMAT_FULL = '%Y/%m/%d %I:%M %p'
       FORMAT_SHORT = '%I:%M:%S %p'
       UPDATE_INTERVAL_SECONDS = 1
@@ -31,10 +33,9 @@ module Bar
       end
 
       def start_timer
-        GLib::Timeout.add_seconds(UPDATE_INTERVAL_SECONDS) do
+        every_seconds(UPDATE_INTERVAL_SECONDS) do
           @button.label = formatted_time
           update_tooltip
-          true # Continue timer
         end
       end
 

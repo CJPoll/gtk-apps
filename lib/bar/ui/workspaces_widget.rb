@@ -3,6 +3,8 @@
 module Bar
   module UI
     class WorkspacesWidget < Gtk::Box
+      include WidgetTimers
+
       UPDATE_INTERVAL_SECONDS = 1
       PULSE_INTERVAL_MS = 750
 
@@ -26,17 +28,13 @@ module Bar
       end
 
       def start_timer
-        GLib::Timeout.add_seconds(UPDATE_INTERVAL_SECONDS) do
-          update_workspaces
-          true # Continue timer
-        end
+        every_seconds(UPDATE_INTERVAL_SECONDS) { update_workspaces }
       end
 
       def start_pulse_timer
-        GLib::Timeout.add(PULSE_INTERVAL_MS) do
+        every_ms(PULSE_INTERVAL_MS) do
           @pulse_state = !@pulse_state
           update_pulse_states
-          true # Continue timer
         end
       end
 
