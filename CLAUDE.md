@@ -19,6 +19,11 @@ Hyprland (Wayland) system. Current apps:
   of a failed emerge.
   Ordinary window; root work (emerge, config installs) always goes through
   sudo -A, never runs inside the app.
+- **hypr-manager** — GUI for ~/hyprland.local.conf: display left-right
+  ordering (drag cards), resolution and rotation (dropdowns), and
+  workspace→monitor binds (drag chips). Writes monitors by EDID desc:, owns
+  only the monitor/workspace span of the file, and applies via hyprctl
+  reload. User-owned file — the only app with no sudo path at all.
 - **greeter** — planned: controller-navigable greetd greeter (fullscreen, not
   layer-shell; deployed to /opt so the unprivileged greetd user can run it).
   See `ai-artifacts/greeter.md` for its design.

@@ -34,6 +34,10 @@ module Compositor
       def switch_workspace(workspace_id)
         system("hyprctl dispatch workspace #{workspace_id}")
       end
+
+      def reload
+        system('hyprctl', 'reload', out: File::NULL, err: File::NULL)
+      end
     end
   end
 end

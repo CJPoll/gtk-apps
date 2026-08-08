@@ -1,0 +1,61 @@
+/* hypr-manager styles, layered over assets/base.css. */
+
+.hypr-root {
+  padding: 12px;
+}
+
+.heading-note {
+  opacity: 0.6;
+  font-size: 12px;
+}
+
+.monitor-card {
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+}
+
+.monitor-handle {
+  font-weight: bold;
+  font-size: 13px;
+}
+
+.screen-preview {
+  background: rgba(88, 166, 255, 0.12);
+  border: 1px solid #58a6ff;
+  border-radius: 4px;
+}
+
+.screen-preview-label {
+  opacity: 0.7;
+  font-size: 11px;
+}
+
+.workspace-chip {
+  background: #1f6feb;
+  color: #ffffff;
+  font-weight: bold;
+  border-radius: 12px;
+  padding: 2px 10px;
+}
+
+.chip-row {
+  padding-top: 4px;
+}
+
+.chip-hint {
+  opacity: 0.4;
+  font-size: 11px;
+  font-style: italic;
+}
+
+.chip-tray {
+  padding: 8px;
+  border: 1px dashed rgba(255, 255, 255, 0.25);
+  border-radius: 8px;
+}
+
+.chip-tray-label {
+  opacity: 0.7;
+  font-size: 12px;
+}
