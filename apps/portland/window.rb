@@ -133,13 +133,14 @@ module Portland
     # dependency keyword/USE/mask requirements surface as a prompt here
     # instead of a failed emerge in the terminal.
     def apply_plan
-      if @plan.installs.empty?
+      resolvable = @plan.installs + @plan.upgrades
+      if resolvable.empty?
         install_config_then_emerge
         return
       end
 
       @plan_bar.busy('Resolving dependencies…')
-      @resolver.resolve(@plan.installs, @overrides) do |result|
+      @resolver.resolve(resolvable, @overrides) do |result|
         update_plan_bar
         handle_resolution(result)
       end

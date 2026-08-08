@@ -41,7 +41,7 @@ module Portland
           slots: Domain::SlotCatalog.build(
             atom,
             Adapters::PortageCli.slot_entries(atom),
-            Adapters::PortageCli.installed_slots(atom),
+            Adapters::PortageCli.installed_slot_versions(atom),
             arch: Adapters::PortageCli.arch,
             keyword_entries: Adapters::PortageCli.keyword_config_entries
           ),

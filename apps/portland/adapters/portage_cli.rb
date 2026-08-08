@@ -75,11 +75,21 @@ module Portland
 
       # Installed slots for one package, e.g. ["3.3", "3.2"].
       def installed_slots(atom)
-        `qlist -IS #{Shellwords.escape(atom)} 2>/dev/null`
+        installed_slot_versions(atom).keys
+      end
+
+      # {slot => installed version}, e.g. {"0" => "3.5a"}.
+      def installed_slot_versions(atom)
+        `qlist -ISv #{Shellwords.escape(atom)} 2>/dev/null`
           .split("\n")
-          .filter_map { |line| line.split(':', 2)[1] }
+          .filter_map do |line|
+            spec, _, slot = line.rpartition(':')
+            next if spec.empty?
+
+            [slot, spec.delete_prefix("#{atom}-")]
+          end.to_h
       rescue Errno::ENOENT
-        []
+        {}
       end
 
       # {version:, slot:, keywords:} for every available version of a package,

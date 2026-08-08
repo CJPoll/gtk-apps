@@ -35,6 +35,11 @@
   color: #ffffff;
 }
 
+.mark-upgrade:checked {
+  background: #238636;
+  color: #ffffff;
+}
+
 .slot-list {
   padding: 4px 10px 8px 26px;
 }

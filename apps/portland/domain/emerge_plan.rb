@@ -29,6 +29,10 @@ module Portland
         atoms_marked(:install)
       end
 
+      def upgrades
+        atoms_marked(:upgrade)
+      end
+
       def removals
         atoms_marked(:remove)
       end
@@ -46,6 +50,7 @@ module Portland
 
         parts = []
         parts << "#{installs.size} to install" if installs.any?
+        parts << "#{upgrades.size} to upgrade" if upgrades.any?
         parts << "#{removals.size} to remove" if removals.any?
         parts.join(' · ')
       end
@@ -57,6 +62,7 @@ module Portland
       def shell_commands
         commands = []
         commands << "sudo -A emerge --ask --verbose #{escaped(installs)}" if installs.any?
+        commands << "sudo -A emerge --ask --verbose --update #{escaped(upgrades)}" if upgrades.any?
         commands << "sudo -A emerge --ask --depclean #{escaped(removals)}" if removals.any?
         commands
       end

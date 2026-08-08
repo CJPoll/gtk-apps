@@ -51,7 +51,9 @@ module Portland
 
         box.pack_start(build_text, expand: true, fill: true, padding: 0)
         box.pack_start(badge('installed', 'installed-badge'), expand: false, fill: false, padding: 0) if @package.installed
-        box.pack_end(build_mark_toggle(atom: @package.atom, installed: @package.installed),
+        header_action = @package.installed ? :remove : :install
+        box.pack_end(build_mark_toggle(atom: @package.atom, action: header_action,
+                                       label: header_action == :remove ? 'Remove' : 'Install'),
                      expand: false, fill: false, padding: 0)
         box
       end
@@ -80,16 +82,22 @@ module Portland
         label
       end
 
-      def build_mark_toggle(atom:, installed:, keyword_check: nil)
-        toggle = Gtk::ToggleButton.new(label: installed ? 'Remove' : 'Install')
+      ACTION_STYLE = {
+        install: 'mark-install',
+        upgrade: 'mark-upgrade',
+        remove: 'mark-remove'
+      }.freeze
+
+      def build_mark_toggle(atom:, action:, label:, keyword_check: nil)
+        toggle = Gtk::ToggleButton.new(label: label)
         toggle.valign = :center
-        toggle.active = !@marked_lookup.call(atom).nil?
-        toggle.style_context.add_class(installed ? 'mark-remove' : 'mark-install')
+        toggle.active = @marked_lookup.call(atom) == action
+        toggle.style_context.add_class(ACTION_STYLE.fetch(action))
         toggle.signal_connect('toggled') do
           next if @updating
 
-          @on_toggle.call(atom, installed ? :remove : :install)
-          # Marking a testing-only slot without accepting its keyword would
+          @on_toggle.call(atom, action)
+          # Marking a testing version without accepting its keyword would
           # just reproduce emerge's mask error; keep the two in step.
           keyword_check.active = toggle.active? if keyword_check&.sensitive?
         end
@@ -136,7 +144,9 @@ module Portland
         row = Gtk::Box.new(:horizontal, 12)
         row.style_context.add_class('slot-row')
 
-        label = Gtk::Label.new("slot #{option.slot} — #{option.newest_version}")
+        text = "slot #{option.slot} — #{option.newest_version}"
+        text += " (installed: #{option.installed_version})" if option.installed
+        label = Gtk::Label.new(text)
         label.halign = :start
         row.pack_start(label, expand: true, fill: true, padding: 0)
 
@@ -147,14 +157,30 @@ module Portland
         slotted_atom = "#{@package.atom}:#{option.slot}"
         keyword_check = build_keyword_check(slotted_atom, option)
         row.pack_start(keyword_check, expand: false, fill: false, padding: 0) if keyword_check
-        row.pack_end(build_mark_toggle(atom: slotted_atom, installed: option.installed,
-                                       keyword_check: keyword_check),
-                     expand: false, fill: false, padding: 0)
+
+        if option.installed
+          row.pack_end(build_mark_toggle(atom: slotted_atom, action: :remove, label: 'Remove'),
+                       expand: false, fill: false, padding: 0)
+          if option.upgrade_available
+            row.pack_end(build_mark_toggle(atom: slotted_atom, action: :upgrade,
+                                           label: "Upgrade → #{option.newest_version}",
+                                           keyword_check: keyword_check),
+                         expand: false, fill: false, padding: 0)
+          end
+        else
+          row.pack_end(build_mark_toggle(atom: slotted_atom, action: :install, label: 'Install',
+                                         keyword_check: keyword_check),
+                       expand: false, fill: false, padding: 0)
+        end
         row
       end
 
+      # Shown when acting on this slot's newest version needs a keyword:
+      # installing a testing slot, or upgrading to a testing version of an
+      # installed one.
       def build_keyword_check(slotted_atom, option)
-        return nil unless option.needed_keyword && !option.installed
+        return nil unless option.needed_keyword
+        return nil if option.installed && !option.upgrade_available
 
         check = Gtk::CheckButton.new("accept #{option.needed_keyword}")
         check.style_context.add_class('keyword-check')
