@@ -75,10 +75,26 @@ module Portland
         end.uniq
       end
 
+      # Unsatisfied soft blocks: "[blocks B ] <sys-apps/shadow-4.19.0_rc1 (...)".
+      # The fix is upgrading the blocking package in the same transaction, so
+      # the blocker's bare atom is the actionable output. Lowercase b blocks
+      # are already satisfied and need nothing.
+      BLOCK_LINE = %r{\A\[blocks B\s*\]\s+([^\s(]+)}
+
+      def self.soft_blockers(output)
+        output.each_line.filter_map do |line|
+          match = BLOCK_LINE.match(line)
+          next unless match
+
+          match[1].sub(/\A[<>=~!]+/, '').sub(%r{-\d[^/]*\z}, '')
+        end.uniq
+      end
+
       ERROR_MARKERS = [
         'emerge: there are no ebuilds',
         '!!! All ebuilds that could satisfy',
-        '!!! Multiple package instances'
+        '!!! Multiple package instances',
+        '[blocks B'
       ].freeze
       ERROR_CONTEXT_LINES = 14
 

@@ -188,6 +188,9 @@ module Portland
 
       accepted[:changes].each { |change| stage_suggested(change) }
       accepted[:unmask_flags].each { |flag| @overrides.set_stable_unmask(flag) }
+      accepted[:extra_atoms].each do |atom|
+        @plan.toggle(atom, :upgrade) unless @plan.action_for(atom)
+      end
       update_plan_bar
       install_config_then_emerge
     end

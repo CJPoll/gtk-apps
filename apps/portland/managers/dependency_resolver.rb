@@ -18,9 +18,10 @@ module Portland
     class DependencyResolver
       MAX_ROUNDS = 6
 
-      Result = Struct.new(:changes, :unmask_flags, :error, :clean, keyword_init: true) do
+      Result = Struct.new(:changes, :unmask_flags, :extra_atoms, :error, :clean,
+                          keyword_init: true) do
         def anything?
-          changes.any? || unmask_flags.any?
+          changes.any? || unmask_flags.any? || extra_atoms.any?
         end
       end
 
@@ -38,9 +39,11 @@ module Portland
       private
 
       def resolve_sync(atoms, overrides, world_update)
+        atoms = atoms.dup
         work = clone_overrides(overrides)
         changes = []
         unmask_flags = []
+        extra_atoms = []
         error = nil
         clean = false
 
@@ -63,12 +66,23 @@ module Portland
             next
           end
 
+          # An unsatisfied soft block clears by upgrading the blocking
+          # package in the same transaction; add it and re-resolve.
+          blockers = Domain::AutounmaskParser.soft_blockers(output)
+                                             .reject { |atom| atoms.include?(atom) }
+          if blockers.any?
+            extra_atoms.concat(blockers)
+            atoms.concat(blockers)
+            next
+          end
+
           error = Domain::AutounmaskParser.resolution_error(output)
           clean = error.nil?
           break
         end
 
-        Result.new(changes: changes, unmask_flags: unmask_flags, error: error, clean: clean)
+        Result.new(changes: changes, unmask_flags: unmask_flags,
+                   extra_atoms: extra_atoms, error: error, clean: clean)
       end
 
       def pretend(atoms, work, world_update)

@@ -22,11 +22,15 @@ module Portland
         show_all
         response = run
 
-        selected = { changes: [], unmask_flags: [] }
+        selected = { changes: [], unmask_flags: [], extra_atoms: [] }
         @checks.each do |check, kind, payload|
           next unless check.active?
 
-          kind == :unmask ? selected[:unmask_flags] << payload : selected[:changes] << payload
+          case kind
+          when :unmask then selected[:unmask_flags] << payload
+          when :extra then selected[:extra_atoms] << payload
+          else selected[:changes] << payload
+          end
         end
 
         destroy
@@ -48,6 +52,7 @@ module Portland
         content_area.pack_start(header, expand: false, fill: false, padding: 0)
 
         list = Gtk::Box.new(:vertical, 4)
+        add_extra_atoms_section(list, result.extra_atoms)
         add_unmask_section(list, result.unmask_flags)
         add_change_section(list, 'package.accept_keywords', result.changes.select { |c| c.kind == :keyword })
         add_change_section(list, 'package.use', result.changes.select { |c| c.kind == :use })
@@ -72,6 +77,21 @@ module Portland
         note.wrap = true
         note.style_context.add_class('dep-note')
         note
+      end
+
+      def add_extra_atoms_section(box, atoms)
+        return if atoms.empty?
+
+        box.pack_start(section_label('Additional packages to include'), expand: false, fill: false, padding: 4)
+        atoms.each do |atom|
+          check = Gtk::CheckButton.new(atom)
+          check.active = true
+          check.style_context.add_class('dep-change')
+          @checks << [check, :extra, atom]
+          box.pack_start(check, expand: false, fill: false, padding: 0)
+          box.pack_start(note_label('upgraded in the same transaction to clear a blocker'),
+                         expand: false, fill: false, padding: 0)
+        end
       end
 
       def add_unmask_section(box, flags)
