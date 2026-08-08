@@ -49,6 +49,23 @@
   padding: 4px 0;
 }
 
+.testing-badge {
+  color: #f0b429;
+  font-size: 11px;
+  border: 1px solid #f0b429;
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+
+.keyword-check {
+  font-size: 12px;
+}
+
+.use-overridden {
+  color: #58a6ff;
+  font-weight: bold;
+}
+
 .plan-bar {
   padding: 8px 4px 0 4px;
   border-top: 1px solid rgba(255, 255, 255, 0.1);

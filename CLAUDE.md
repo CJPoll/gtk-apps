@@ -9,9 +9,12 @@ Hyprland (Wayland) system. Current apps:
 
 - **bar** — per-monitor status bar (layer-shell surface, cyberpunk neon theme)
 - **launcher** — Mac-style dock with icon magnification (layer-shell surface)
-- **portland** — portage frontend: package search, install/remove planning
-  (ordinary window; root-level emerge runs happen in a spawned terminal via
-  sudo, never inside the app)
+- **portland** — portage frontend: package search, install/remove planning,
+  and per-package config (USE flags, accepted keywords) backed by
+  /etc/portage/package.*/ — portland reads all files there for state but
+  writes only its own zz-portland files, which sort last and win conflicts.
+  Ordinary window; root work (emerge, config installs) always goes through
+  sudo -A, never runs inside the app.
 - **greeter** — planned: controller-navigable greetd greeter (fullscreen, not
   layer-shell; deployed to /opt so the unprivileged greetd user can run it).
   See `ai-artifacts/greeter.md` for its design.

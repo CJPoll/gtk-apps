@@ -23,10 +23,15 @@ module Portland
         pack_end(@clear, expand: false, fill: false, padding: 0)
       end
 
-      def update(plan)
-        @summary.text = plan.summary
-        @apply.sensitive = !plan.empty?
-        @clear.sensitive = !plan.empty?
+      def update(plan, config_pending: false)
+        parts = []
+        parts << plan.summary unless plan.empty?
+        parts << 'config changes pending' if config_pending
+        @summary.text = parts.empty? ? 'Nothing marked' : parts.join(' · ')
+
+        actionable = !plan.empty? || config_pending
+        @apply.sensitive = actionable
+        @clear.sensitive = actionable
       end
     end
   end

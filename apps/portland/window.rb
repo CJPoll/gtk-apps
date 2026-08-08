@@ -10,7 +10,9 @@ module Portland
 
       @plan = Domain::EmergePlan.new
       @search_runner = Managers::SearchRunner.new(on_results: method(:render_results))
-      @slot_fetcher = Managers::SlotFetcher.new
+      @detail_fetcher = Managers::DetailFetcher.new
+      @overrides = load_overrides
+      @packages = []
 
       setup_ui
       show_all
@@ -29,7 +31,7 @@ module Portland
         on_apply: -> { apply_plan },
         on_clear: -> { clear_plan }
       )
-      @plan_bar.update(@plan)
+      update_plan_bar
       root.pack_end(@plan_bar, expand: false, fill: false, padding: 0)
 
       add(root)
@@ -74,14 +76,19 @@ module Portland
     end
 
     def render_results(packages)
+      @packages = packages
       @results_list.children.each(&:destroy)
 
       packages.each do |package|
         row = UI::PackageRow.new(
           package,
-          slot_fetcher: @slot_fetcher,
+          detail_fetcher: @detail_fetcher,
           marked_lookup: ->(atom) { @plan.action_for(atom) },
-          on_toggle: method(:toggle_mark)
+          use_staged_lookup: ->(atom, flag) { @overrides.use_for(atom)[flag] },
+          keyword_staged_lookup: ->(atom) { @overrides.keyword_for(atom) },
+          on_toggle: method(:toggle_mark),
+          on_use_toggle: method(:stage_use_change),
+          on_keyword_toggle: method(:stage_keyword_change)
         )
         @results_list.add(row)
       end
@@ -89,12 +96,54 @@ module Portland
       @results_list.show_all
     end
 
-    def toggle_mark(atom, action)
-      @plan.toggle(atom, action)
-      @plan_bar.update(@plan)
+    def load_overrides
+      Domain::Overrides.new(
+        use_content: Adapters::PortageCli.portland_use_content,
+        keywords_content: Adapters::PortageCli.portland_keywords_content
+      )
     end
 
+    def update_plan_bar
+      @plan_bar.update(@plan, config_pending: @overrides.dirty?)
+    end
+
+    def toggle_mark(atom, action)
+      @plan.toggle(atom, action)
+      update_plan_bar
+    end
+
+    def stage_use_change(atom, flag, value)
+      @overrides.set_use(atom, flag, value)
+      update_plan_bar
+    end
+
+    def stage_keyword_change(atom, keyword)
+      @overrides.set_keyword(atom, keyword)
+      update_plan_bar
+    end
+
+    # Config changes install first (headless sudo — the askpass dialog
+    # appears); emerges follow in a terminal only once that succeeds, so a
+    # cancelled password never leaves emerge running against stale config.
     def apply_plan
+      unless @overrides.dirty?
+        run_emerges
+        return
+      end
+
+      Adapters::ConfigInstaller.install(@overrides.render_use, @overrides.render_keywords) do |success|
+        if success
+          @overrides.saved!
+          @detail_fetcher.invalidate!
+          update_plan_bar
+          run_emerges
+        else
+          warn 'portland: config install failed or was cancelled; emerge not started'
+        end
+      end
+    end
+
+    def run_emerges
       commands = @plan.shell_commands
       return if commands.empty?
 
@@ -103,10 +152,9 @@ module Portland
 
     def clear_plan
       @plan.clear
-      @plan_bar.update(@plan)
-      @results_list.children.each do |row|
-        row.reset! if row.respond_to?(:reset!)
-      end
+      @overrides = load_overrides
+      update_plan_bar
+      render_results(@packages)
     end
   end
 end

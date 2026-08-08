@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require 'set'
 require 'shellwords'
 
 module Portland
@@ -35,23 +36,131 @@ module Portland
         []
       end
 
-      # [version, slot] pairs for every available version of a package, read
-      # from each repo's pregenerated metadata cache (which has SLOT already
-      # resolved — no ebuild sourcing). Overlays without a metadata/md5-cache
-      # directory simply contribute nothing.
+      # {version:, slot:, keywords:} for every available version of a package,
+      # read from each repo's pregenerated metadata cache (SLOT and KEYWORDS
+      # already resolved — no ebuild sourcing). Overlays without a
+      # metadata/md5-cache directory simply contribute nothing.
       def slot_entries(atom)
+        each_cache_file(atom).filter_map do |version, path|
+          fields = cache_fields(path, %w[SLOT KEYWORDS])
+          next unless fields['SLOT']
+
+          { version: version, slot: fields['SLOT'], keywords: fields.fetch('KEYWORDS', '') }
+        end
+      end
+
+      # IUSE of the newest cached version (display source for the flag list).
+      def package_iuse(atom)
+        newest = each_cache_file(atom)
+                 .max_by { |version, _| version.scan(/\d+/).map(&:to_i) }
+        return '' unless newest
+
+        cache_fields(newest[1], %w[IUSE]).fetch('IUSE', '')
+      end
+
+      def each_cache_file(atom)
         category, name = atom.split('/', 2)
         return [] unless category && name
 
         md5_cache_dirs.flat_map do |dir|
           Dir.glob(File.join(dir, category, "#{name}-*")).filter_map do |path|
             version = File.basename(path).delete_prefix("#{name}-")
-            next unless version.match?(/\A\d/)
+            [version, path] if version.match?(/\A\d/)
+          end
+        end
+      end
 
-            slot_line = File.foreach(path).find { |line| line.start_with?('SLOT=') }
-            next unless slot_line
+      def cache_fields(path, names)
+        File.foreach(path).each_with_object({}) do |line, fields|
+          names.each do |field_name|
+            prefix = "#{field_name}="
+            fields[field_name] = line.chomp.delete_prefix(prefix) if line.start_with?(prefix)
+          end
+        end
+      end
 
-            [version, slot_line.chomp.delete_prefix('SLOT=')]
+      def arch
+        @arch ||= `portageq envvar ARCH 2>/dev/null`.strip
+      end
+
+      def global_use
+        @global_use ||= `portageq envvar USE 2>/dev/null`.split.to_set
+      rescue Errno::ENOENT
+        @global_use = Set.new
+      end
+
+      # All entries across every file in a package.* config directory,
+      # parsed but unfiltered; domain code decides relevance.
+      def use_config_entries
+        config_entries('/etc/portage/package.use')
+      end
+
+      def keyword_config_entries
+        config_entries('/etc/portage/package.accept_keywords')
+      end
+
+      def config_entries(dir)
+        return [] unless File.directory?(dir)
+
+        Dir.children(dir).sort.flat_map do |file|
+          path = File.join(dir, file)
+          next [] unless File.file?(path) && File.readable?(path)
+
+          Domain::ConfigFileFormat.parse(File.read(path), file: file)
+        end
+      end
+
+      def portland_use_content
+        read_if_exists('/etc/portage/package.use/zz-portland')
+      end
+
+      def portland_keywords_content
+        read_if_exists('/etc/portage/package.accept_keywords/zz-portland')
+      end
+
+      def read_if_exists(path)
+        File.readable?(path) ? File.read(path) : ''
+      end
+
+      # {flag => description}: per-package descriptions from use.local.desc
+      # overlaid on the global use.desc ones.
+      def use_descriptions(atom)
+        global_flag_descriptions.merge(local_flag_descriptions.fetch(atom, {}))
+      end
+
+      def global_flag_descriptions
+        @global_flag_descriptions ||= md5_cache_dirs.each_with_object({}) do |dir, all|
+          path = File.join(repo_root(dir), 'profiles', 'use.desc')
+          next unless File.readable?(path)
+
+          File.foreach(path) do |line|
+            next if line.start_with?('#')
+
+            flag, description = line.chomp.split(' - ', 2)
+            all[flag] = description if flag && description
+          end
+        end
+      end
+
+      # The md5-cache dir is <repo>/metadata/md5-cache; profiles sit at the
+      # repo root, two levels up.
+      def repo_root(md5_cache_dir)
+        File.expand_path('../..', md5_cache_dir)
+      end
+
+      def local_flag_descriptions
+        @local_flag_descriptions ||= md5_cache_dirs.each_with_object({}) do |dir, all|
+          path = File.join(repo_root(dir), 'profiles', 'use.local.desc')
+          next unless File.readable?(path)
+
+          File.foreach(path) do |line|
+            next if line.start_with?('#')
+
+            spec, description = line.chomp.split(' - ', 2)
+            next unless spec && description
+
+            atom_key, flag = spec.split(':', 2)
+            (all[atom_key] ||= {})[flag] = description if flag
           end
         end
       end
