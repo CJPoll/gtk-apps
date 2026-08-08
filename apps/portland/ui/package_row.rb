@@ -32,58 +32,60 @@ module Portland
 
       def build
         @expander = Gtk::Expander.new
-        @expander.label_fill = true
         @expander.label_widget = build_header
         @expander.signal_connect('notify::expanded') do
           load_details if @expander.expanded?
         end
 
         @detail_box = Gtk::Box.new(:vertical, 4)
-        @detail_box.style_context.add_class('slot-list')
-        @expander.add(@detail_box)
+        @detail_box.add_css_class('slot-list')
+        @expander.child = @detail_box
 
-        add(@expander)
+        self.child = @expander
       end
 
       def build_header
         box = Gtk::Box.new(:horizontal, 12)
-        box.style_context.add_class('package-row')
+        box.add_css_class('package-row')
+        # GTK4 dropped Expander#label_fill; an hexpanding label widget fills
+        # the title line instead.
+        box.hexpand = true
 
-        box.pack_start(build_text, expand: true, fill: true, padding: 0)
-        box.pack_start(badge(@package.note, 'update-badge'), expand: false, fill: false, padding: 0) if @package.note
-        box.pack_start(badge('installed', 'installed-badge'), expand: false, fill: false, padding: 0) if @package.installed
+        box.append(build_text)
+        box.append(badge(@package.note, 'update-badge')) if @package.note
+        box.append(badge('installed', 'installed-badge')) if @package.installed
+
         header_action = @package.installed ? :remove : :install
-        box.pack_end(build_mark_toggle(atom: @package.atom, action: header_action,
-                                       label: header_action == :remove ? 'Remove' : 'Install'),
-                     expand: false, fill: false, padding: 0)
         if @package.note
-          box.pack_end(build_mark_toggle(atom: @package.atom, action: :upgrade, label: 'Upgrade'),
-                       expand: false, fill: false, padding: 0)
+          box.append(build_mark_toggle(atom: @package.atom, action: :upgrade, label: 'Upgrade'))
         end
+        box.append(build_mark_toggle(atom: @package.atom, action: header_action,
+                                     label: header_action == :remove ? 'Remove' : 'Install'))
         box
       end
 
       def build_text
         text = Gtk::Box.new(:vertical, 2)
+        text.hexpand = true
 
         name = Gtk::Label.new(@package.atom)
         name.halign = :start
-        name.style_context.add_class('package-name')
+        name.add_css_class('package-name')
 
         description = Gtk::Label.new(@package.description)
         description.halign = :start
         description.ellipsize = :end
-        description.style_context.add_class('package-description')
+        description.add_css_class('package-description')
 
-        text.pack_start(name, expand: false, fill: false, padding: 0)
-        text.pack_start(description, expand: false, fill: false, padding: 0)
+        text.append(name)
+        text.append(description)
         text
       end
 
       def badge(text, style_class)
         label = Gtk::Label.new(text)
         label.valign = :center
-        label.style_context.add_class(style_class)
+        label.add_css_class(style_class)
         label
       end
 
@@ -97,7 +99,7 @@ module Portland
         toggle = Gtk::ToggleButton.new(label: label)
         toggle.valign = :center
         toggle.active = @marked_lookup.call(atom) == action
-        toggle.style_context.add_class(ACTION_STYLE.fetch(action))
+        toggle.add_css_class(ACTION_STYLE.fetch(action))
         toggle.signal_connect('toggled') do
           next if @updating
 
@@ -114,11 +116,10 @@ module Portland
 
         @details_requested = true
         loading = note_label('Loading details…')
-        @detail_box.add(loading)
-        @detail_box.show_all
+        @detail_box.append(loading)
 
         @detail_fetcher.fetch(@package.atom) do |details|
-          loading.destroy
+          @detail_box.remove(loading)
           render_details(details)
         end
       end
@@ -126,56 +127,54 @@ module Portland
       def note_label(text)
         note = Gtk::Label.new(text)
         note.halign = :start
-        note.style_context.add_class('slot-note')
+        note.add_css_class('slot-note')
         note
       end
 
       def render_details(details)
         render_slots(details.slots)
         render_use_flags(details.use_flags)
-        @detail_box.show_all
       end
 
       def render_slots(options)
         if options.empty?
-          @detail_box.add(note_label('No slot metadata available for this package'))
+          @detail_box.append(note_label('No slot metadata available for this package'))
           return
         end
 
-        options.each { |option| @detail_box.add(build_slot_row(option)) }
+        options.each { |option| @detail_box.append(build_slot_row(option)) }
       end
 
       def build_slot_row(option)
         row = Gtk::Box.new(:horizontal, 12)
-        row.style_context.add_class('slot-row')
+        row.add_css_class('slot-row')
 
         text = "slot #{option.slot} — #{option.newest_version}"
         text += " (installed: #{option.installed_version})" if option.installed
         label = Gtk::Label.new(text)
         label.halign = :start
-        row.pack_start(label, expand: true, fill: true, padding: 0)
+        label.hexpand = true
+        row.append(label)
 
-        row.pack_start(badge(option.needed_keyword == '**' ? 'unkeyworded' : '~testing', 'testing-badge'),
-                       expand: false, fill: false, padding: 0) if option.needed_keyword
-        row.pack_start(badge('installed', 'installed-badge'), expand: false, fill: false, padding: 0) if option.installed
+        if option.needed_keyword
+          row.append(badge(option.needed_keyword == '**' ? 'unkeyworded' : '~testing', 'testing-badge'))
+        end
+        row.append(badge('installed', 'installed-badge')) if option.installed
 
         slotted_atom = "#{@package.atom}:#{option.slot}"
         keyword_check = build_keyword_check(slotted_atom, option)
-        row.pack_start(keyword_check, expand: false, fill: false, padding: 0) if keyword_check
+        row.append(keyword_check) if keyword_check
 
         if option.installed
-          row.pack_end(build_mark_toggle(atom: slotted_atom, action: :remove, label: 'Remove'),
-                       expand: false, fill: false, padding: 0)
           if option.upgrade_available
-            row.pack_end(build_mark_toggle(atom: slotted_atom, action: :upgrade,
-                                           label: "Upgrade → #{option.newest_version}",
-                                           keyword_check: keyword_check),
-                         expand: false, fill: false, padding: 0)
+            row.append(build_mark_toggle(atom: slotted_atom, action: :upgrade,
+                                         label: "Upgrade → #{option.newest_version}",
+                                         keyword_check: keyword_check))
           end
+          row.append(build_mark_toggle(atom: slotted_atom, action: :remove, label: 'Remove'))
         else
-          row.pack_end(build_mark_toggle(atom: slotted_atom, action: :install, label: 'Install',
-                                         keyword_check: keyword_check),
-                       expand: false, fill: false, padding: 0)
+          row.append(build_mark_toggle(atom: slotted_atom, action: :install, label: 'Install',
+                                       keyword_check: keyword_check))
         end
         row
       end
@@ -187,8 +186,9 @@ module Portland
         return nil unless option.needed_keyword
         return nil if option.installed && !option.upgrade_available
 
-        check = Gtk::CheckButton.new("accept #{option.needed_keyword}")
-        check.style_context.add_class('keyword-check')
+        check = Gtk::CheckButton.new
+        check.label = "accept #{option.needed_keyword}"
+        check.add_css_class('keyword-check')
 
         foreign = option.accepted_by && option.accepted_by != 'zz-portland'
         check.active = foreign || option.accepted_by == 'zz-portland' ||
@@ -209,7 +209,7 @@ module Portland
       def render_use_flags(flags)
         return if flags.empty?
 
-        @detail_box.add(note_label('USE flags'))
+        @detail_box.append(note_label('USE flags'))
 
         flow = Gtk::FlowBox.new
         flow.selection_mode = :none
@@ -218,15 +218,16 @@ module Portland
         flow.row_spacing = 2
         flow.homogeneous = false
 
-        flags.each { |flag| flow.add(build_use_check(flag)) }
-        @detail_box.add(flow)
+        flags.each { |flag| flow.insert(build_use_check(flag), -1) }
+        @detail_box.append(flow)
       end
 
       def build_use_check(flag)
-        check = Gtk::CheckButton.new(flag.name)
+        check = Gtk::CheckButton.new
+        check.label = flag.name
         staged = @use_staged_lookup.call(@package.atom, flag.name)
         check.active = staged.nil? ? flag.enabled : staged
-        check.style_context.add_class('use-overridden') if flag.overridden? || !staged.nil?
+        check.add_css_class('use-overridden') if flag.overridden? || !staged.nil?
         check.tooltip_text = use_tooltip(flag)
 
         check.signal_connect('toggled') do
@@ -240,9 +241,9 @@ module Portland
           @on_use_toggle.call(@package.atom, flag.name, value)
 
           if value.nil?
-            check.style_context.remove_class('use-overridden')
+            check.remove_css_class('use-overridden')
           else
-            check.style_context.add_class('use-overridden')
+            check.add_css_class('use-overridden')
           end
         end
         check

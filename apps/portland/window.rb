@@ -16,26 +16,25 @@ module Portland
       @packages = []
 
       setup_ui
-      show_all
     end
 
     private
 
     def setup_ui
       root = Gtk::Box.new(:vertical, 8)
-      root.style_context.add_class('portland-root')
+      root.add_css_class('portland-root')
 
-      root.pack_start(build_top_bar, expand: false, fill: false, padding: 0)
-      root.pack_start(build_results, expand: true, fill: true, padding: 0)
+      root.append(build_top_bar)
+      root.append(build_results)
 
       @plan_bar = UI::PlanBar.new(
         on_apply: -> { apply_plan },
         on_clear: -> { clear_plan }
       )
       update_plan_bar
-      root.pack_end(@plan_bar, expand: false, fill: false, padding: 0)
+      root.append(@plan_bar)
 
-      add(root)
+      set_child(root)
     end
 
     def build_top_bar
@@ -68,11 +67,12 @@ module Portland
         update_plan_bar
       end
 
-      bar.pack_start(@search_entry, expand: true, fill: true, padding: 0)
-      bar.pack_end(sync_button, expand: false, fill: false, padding: 0)
-      bar.pack_end(world_button, expand: false, fill: false, padding: 0)
-      bar.pack_end(@upgrade_all, expand: false, fill: false, padding: 0)
-      bar.pack_end(updates_button, expand: false, fill: false, padding: 0)
+      @search_entry.hexpand = true
+      bar.append(@search_entry)
+      bar.append(updates_button)
+      bar.append(@upgrade_all)
+      bar.append(world_button)
+      bar.append(sync_button)
       bar
     end
 
@@ -81,13 +81,13 @@ module Portland
       @results_list.selection_mode = :none
 
       @placeholder = Gtk::Label.new('Search for packages to get started')
-      @placeholder.style_context.add_class('results-placeholder')
-      @placeholder.show
+      @placeholder.add_css_class('results-placeholder')
       @results_list.set_placeholder(@placeholder)
 
       scrolled = Gtk::ScrolledWindow.new
       scrolled.set_policy(:never, :automatic)
-      scrolled.add(@results_list)
+      scrolled.child = @results_list
+      scrolled.vexpand = true
       scrolled
     end
 
@@ -106,9 +106,14 @@ module Portland
 
     def scan_updates
       @current_view = [:updates]
-      @results_list.children.each(&:destroy)
+      clear_results
       @placeholder.text = 'Scanning installed packages for available updates…'
       @search_runner.list_updates
+    end
+
+    # ListBox#remove_all removes rows only; the placeholder survives.
+    def clear_results
+      @results_list.remove_all
     end
 
     # After an emerge finishes (or a sync), installed state, versions, and
@@ -127,7 +132,7 @@ module Portland
     def render_results(packages)
       @placeholder.text = packages.empty? ? 'Nothing found' : 'Search for packages to get started'
       @packages = packages
-      @results_list.children.each(&:destroy)
+      clear_results
 
       packages.each do |package|
         row = UI::PackageRow.new(
@@ -140,10 +145,8 @@ module Portland
           on_use_toggle: method(:stage_use_change),
           on_keyword_toggle: method(:stage_keyword_change)
         )
-        @results_list.add(row)
+        @results_list.append(row)
       end
-
-      @results_list.show_all
     end
 
     def load_overrides
@@ -206,16 +209,17 @@ module Portland
         return
       end
 
-      accepted = UI::DependencyChangesDialog.new(parent: self, result: result).run_and_select
-      return unless accepted
+      UI::DependencyChangesDialog.new(parent: self, result: result).choose do |accepted|
+        next unless accepted
 
-      accepted[:changes].each { |change| stage_suggested(change) }
-      accepted[:unmask_flags].each { |flag| @overrides.set_stable_unmask(flag) }
-      accepted[:extra_atoms].each do |atom|
-        @plan.toggle(atom, :upgrade) unless @plan.action_for(atom)
+        accepted[:changes].each { |change| stage_suggested(change) }
+        accepted[:unmask_flags].each { |flag| @overrides.set_stable_unmask(flag) }
+        accepted[:extra_atoms].each do |atom|
+          @plan.toggle(atom, :upgrade) unless @plan.action_for(atom)
+        end
+        update_plan_bar
+        install_config_then_emerge
       end
-      update_plan_bar
-      install_config_then_emerge
     end
 
     def stage_suggested(change)
@@ -233,8 +237,8 @@ module Portland
                                       buttons: :close,
                                       message: 'emerge cannot resolve this install')
       dialog.secondary_text = error
-      dialog.run
-      dialog.destroy
+      dialog.signal_connect('response') { dialog.destroy }
+      dialog.present
     end
 
     # Config installs first (headless sudo — the askpass dialog appears);

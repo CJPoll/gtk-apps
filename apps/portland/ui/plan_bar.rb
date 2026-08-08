@@ -6,21 +6,22 @@ module Portland
     class PlanBar < Gtk::Box
       def initialize(on_apply:, on_clear:)
         super(:horizontal, 8)
-        style_context.add_class('plan-bar')
+        add_css_class('plan-bar')
 
         @summary = Gtk::Label.new('Nothing marked')
         @summary.halign = :start
-        pack_start(@summary, expand: true, fill: true, padding: 0)
+        @summary.hexpand = true
+        append(@summary)
 
         @apply = Gtk::Button.new(label: 'Apply…')
-        @apply.style_context.add_class('suggested-action')
+        @apply.add_css_class('suggested-action')
         @apply.signal_connect('clicked') { on_apply.call }
 
         @clear = Gtk::Button.new(label: 'Clear')
         @clear.signal_connect('clicked') { on_clear.call }
 
-        pack_end(@apply, expand: false, fill: false, padding: 0)
-        pack_end(@clear, expand: false, fill: false, padding: 0)
+        append(@clear)
+        append(@apply)
       end
 
       # Temporary state while a background step runs; the next update
