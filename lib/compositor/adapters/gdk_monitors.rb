@@ -22,8 +22,9 @@ module Compositor
         display = Gdk::Display.default
         return nil unless display
 
-        display.n_monitors.times do |index|
-          monitor = display.get_monitor(index)
+        monitors = display.monitors
+        monitors.n_items.times do |index|
+          monitor = monitors.get_item(index)
           geometry = monitor.geometry
 
           return monitor if geometry.x == x_position && geometry.y == y_position

@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require 'gtk3'
+require 'gtk4'
 require 'zeitwerk'
 
 module Launcher; end

@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require 'gtk3'
+require 'gtk4'
 
 # Minimal SUDO_ASKPASS helper: sudo invokes this with its prompt as ARGV[0],
 # reads the password from stdout, and treats a non-zero exit as cancellation.

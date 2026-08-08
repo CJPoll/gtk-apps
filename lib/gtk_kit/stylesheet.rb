@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module GtkKit
-  # Applies a stack of CSS files to the default screen, in order, so an app's
+  # Applies a stack of CSS files to the default display, in order, so an app's
   # own sheet layers over the shared base. Reloadable in place for live
   # style iteration.
   class Stylesheet
@@ -19,8 +19,8 @@ module GtkKit
 
         provider = Gtk::CssProvider.new
         provider.load(path: path)
-        Gtk::StyleContext.add_provider_for_screen(
-          Gdk::Screen.default,
+        Gtk::StyleContext.add_provider_for_display(
+          Gdk::Display.default,
           provider,
           Gtk::StyleProvider::PRIORITY_USER
         )
