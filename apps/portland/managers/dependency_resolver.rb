@@ -24,9 +24,9 @@ module Portland
         end
       end
 
-      def resolve(atoms, overrides, &on_result)
+      def resolve(atoms, overrides, world_update: false, &on_result)
         Thread.new do
-          result = resolve_sync(atoms, overrides)
+          result = resolve_sync(atoms, overrides, world_update)
 
           GLib::Idle.add do
             on_result.call(result)
@@ -37,7 +37,7 @@ module Portland
 
       private
 
-      def resolve_sync(atoms, overrides)
+      def resolve_sync(atoms, overrides, world_update)
         work = clone_overrides(overrides)
         changes = []
         unmask_flags = []
@@ -45,7 +45,7 @@ module Portland
         clean = false
 
         MAX_ROUNDS.times do
-          output = pretend(atoms, work)
+          output = pretend(atoms, work, world_update)
 
           round_changes = Domain::AutounmaskParser.parse(output)
           if round_changes.any?
@@ -71,13 +71,13 @@ module Portland
         Result.new(changes: changes, unmask_flags: unmask_flags, error: error, clean: clean)
       end
 
-      def pretend(atoms, work)
+      def pretend(atoms, work, world_update)
         sandbox = Adapters::ResolutionSandbox.build(
           use_content: work.render_use,
           keywords_content: work.render_keywords,
           stable_unmask_content: work.render_stable_unmask
         )
-        Adapters::PortageCli.pretend_install(atoms, configroot: sandbox)
+        Adapters::PortageCli.pretend_install(atoms, configroot: sandbox, world_update: world_update)
       end
 
       # Render/parse round trip: a private working copy the loop can stage

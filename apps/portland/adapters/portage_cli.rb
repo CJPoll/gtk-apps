@@ -25,10 +25,16 @@ module Portland
       # needs no root). Slow — seconds with backtracking — so callers run it
       # off the main loop. configroot points emerge at a sandbox copy of
       # /etc/portage so staged-but-uninstalled config participates.
-      def pretend_install(atoms, configroot: nil)
-        escaped = atoms.map { |atom| Shellwords.escape(atom) }.join(' ')
+      def pretend_install(atoms, configroot: nil, world_update: false)
+        targets = atoms.map { |atom| Shellwords.escape(atom) }
+        flags = ['--pretend', '--autounmask=y', '--autounmask-use=y',
+                 '--autounmask-backtrack=y', '--color=n', '--nospinner']
+        if world_update
+          flags += ['--update', '--deep', '--newuse']
+          targets << '@world'
+        end
         env = configroot ? "PORTAGE_CONFIGROOT=#{Shellwords.escape(configroot)} " : ''
-        `#{env}emerge --pretend --autounmask=y --autounmask-use=y --autounmask-backtrack=y --color=n --nospinner #{escaped} 2>&1`
+        `#{env}emerge #{flags.join(' ')} #{targets.join(' ')} 2>&1`
       rescue Errno::ENOENT
         ''
       end

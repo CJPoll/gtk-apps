@@ -57,9 +57,19 @@ module Portland
       updates_button.tooltip_text = 'List installed packages with a newer version visible under your keywords'
       updates_button.signal_connect('clicked') { scan_updates }
 
+      @upgrade_all = Gtk::ToggleButton.new(label: 'Upgrade All')
+      @upgrade_all.tooltip_text = 'Mark a full world update (emerge --update --deep --newuse @world) in the plan'
+      @upgrade_all.signal_connect('toggled') do
+        next if @syncing_upgrade_all
+
+        @plan.toggle_world_update
+        update_plan_bar
+      end
+
       bar.pack_start(@search_entry, expand: true, fill: true, padding: 0)
       bar.pack_end(sync_button, expand: false, fill: false, padding: 0)
       bar.pack_end(world_button, expand: false, fill: false, padding: 0)
+      bar.pack_end(@upgrade_all, expand: false, fill: false, padding: 0)
       bar.pack_end(updates_button, expand: false, fill: false, padding: 0)
       bar
     end
@@ -124,6 +134,11 @@ module Portland
 
     def update_plan_bar
       @plan_bar.update(@plan, config_pending: @overrides.dirty?)
+      # Clear/revert reset the plan; keep the toggle honest without
+      # re-firing its handler.
+      @syncing_upgrade_all = true
+      @upgrade_all.active = @plan.world_update?
+      @syncing_upgrade_all = false
     end
 
     def toggle_mark(atom, action)
@@ -146,13 +161,13 @@ module Portland
     # instead of a failed emerge in the terminal.
     def apply_plan
       resolvable = @plan.installs + @plan.upgrades
-      if resolvable.empty?
+      if resolvable.empty? && !@plan.world_update?
         install_config_then_emerge
         return
       end
 
-      @plan_bar.busy('Resolving dependencies…')
-      @resolver.resolve(resolvable, @overrides) do |result|
+      @plan_bar.busy(@plan.world_update? ? 'Resolving world update…' : 'Resolving dependencies…')
+      @resolver.resolve(resolvable, @overrides, world_update: @plan.world_update?) do |result|
         update_plan_bar
         handle_resolution(result)
       end

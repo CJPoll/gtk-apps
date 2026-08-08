@@ -75,27 +75,35 @@ module Portland
         end.uniq
       end
 
-      # The failure paragraphs, for surfacing verbatim when resolution can't
-      # be fixed by config changes portland knows how to stage.
-      def self.resolution_error(output)
-        lines = []
-        capturing = false
+      ERROR_MARKERS = [
+        'emerge: there are no ebuilds',
+        '!!! All ebuilds that could satisfy',
+        '!!! Multiple package instances'
+      ].freeze
+      ERROR_CONTEXT_LINES = 14
 
-        output.each_line do |raw|
-          line = raw.chomp
-          if line.start_with?('emerge: there are no ebuilds', '!!! All ebuilds that could satisfy')
-            capturing = true
-            lines << line
-          elsif capturing && (line.start_with?('(dependency required by', '- ', '!!!') || line.strip.empty?)
-            lines << line
-            capturing = false if line.strip.empty?
-          else
-            capturing = false
-          end
+      # The failure paragraphs, for surfacing verbatim when resolution can't
+      # be fixed by config changes portland knows how to stage. Each marker
+      # captures a bounded block of context (mask reasons, dependency
+      # chains, slot-conflict participants).
+      def self.resolution_error(output)
+        lines = output.lines.map(&:chomp)
+        blocks = []
+        last_end = -1
+
+        lines.each_with_index do |line, index|
+          next if index <= last_end
+          next unless ERROR_MARKERS.any? { |marker| line.start_with?(marker) }
+
+          block = lines[index, ERROR_CONTEXT_LINES]
+          cutoff = block.index { |l| l.start_with?('NOTE:', 'For more information') }
+          block = block[0...cutoff] if cutoff
+          last_end = index + block.size - 1
+
+          blocks << block.join("\n").strip
         end
 
-        text = lines.join("\n").strip
-        text.empty? ? nil : text
+        blocks.empty? ? nil : blocks.join("\n\n")
       end
     end
   end

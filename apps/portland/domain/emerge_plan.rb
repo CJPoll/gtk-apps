@@ -10,6 +10,16 @@ module Portland
     class EmergePlan
       def initialize
         @marks = {}
+        @world_update = false
+      end
+
+      # Everything with an update at once: emerge -uDN @world.
+      def toggle_world_update
+        @world_update = !@world_update
+      end
+
+      def world_update?
+        @world_update
       end
 
       # Marking an atom with its current action again unmarks it.
@@ -38,17 +48,19 @@ module Portland
       end
 
       def empty?
-        @marks.empty?
+        @marks.empty? && !@world_update
       end
 
       def clear
         @marks.clear
+        @world_update = false
       end
 
       def summary
         return 'Nothing marked' if empty?
 
         parts = []
+        parts << 'world update' if @world_update
         parts << "#{installs.size} to install" if installs.any?
         parts << "#{upgrades.size} to upgrade" if upgrades.any?
         parts << "#{removals.size} to remove" if removals.any?
@@ -61,6 +73,7 @@ module Portland
       # through the GUI askpass helper (Terminal sets SUDO_ASKPASS).
       def shell_commands
         commands = []
+        commands << 'sudo -A emerge --ask --verbose --update --deep --newuse @world' if @world_update
         commands << "sudo -A emerge --ask --verbose #{escaped(installs)}" if installs.any?
         commands << "sudo -A emerge --ask --verbose --update #{escaped(upgrades)}" if upgrades.any?
         commands << "sudo -A emerge --ask --depclean #{escaped(removals)}" if removals.any?
