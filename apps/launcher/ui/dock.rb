@@ -75,6 +75,10 @@ module Launcher
       end
 
       def on_pointer_motion(cursor_x)
+        # Cached on first motion, not at map: geometry is guaranteed settled
+        # once the pointer is over the dock, and the icons are still at base
+        # size so the centers are their resting positions.
+        cache_icon_positions if @icon_centers.empty?
         update_magnification(cursor_x)
       end
 
@@ -94,8 +98,8 @@ module Launcher
       end
 
       # Lock the icon box width to its initial size so magnification does not
-      # re-center the row (jitter), and cache icon centers for the falloff
-      # curve. Runs one idle cycle after map, once the first layout has sizes.
+      # re-center the row (jitter). Runs one idle cycle after map, once the
+      # first layout has sizes.
       def lock_geometry_after_map
         signal_connect_after('map') do
           GLib::Idle.add do
@@ -104,7 +108,6 @@ module Launcher
               @icon_box.set_size_request(alloc.width, -1)
               @background.set_size_request(alloc.width, DOCK_BOX_HEIGHT)
               @bg_container.set_size_request(alloc.width, DOCK_HEIGHT)
-              cache_icon_positions
             end
             false
           end
@@ -112,16 +115,18 @@ module Launcher
         end
       end
 
+      # Icon centers in the dock's own coordinate space — the same space the
+      # motion controller reports in. Translating from each icon avoids
+      # parent-relative allocation math, which reads garbage while ancestors
+      # are still settling their first layout.
       def cache_icon_positions
-        @icon_centers = []
-        box_alloc = @icon_box.allocation
-        box_offset_x = box_alloc.x
-
-        @icons.each do |icon|
-          icon_alloc = icon.allocation
-          center_x = box_offset_x + icon_alloc.x + DockIcon::BASE_SIZE / 2.0 + 4 # +4 for padding
-          @icon_centers << center_x
+        centers = @icons.map do |icon|
+          point = icon.translate_coordinates(self, DockIcon::BASE_SIZE / 2.0, 0)
+          point && point[0]
         end
+        return unless centers.all? # any nil: not sharing a root yet; retry next motion
+
+        @icon_centers = centers
       end
 
       # One motion controller on the dock covers every child icon: GTK4
