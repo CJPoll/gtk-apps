@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This repository is a monorepo of GTK3 + Ruby desktop applications for a
+This repository is a monorepo of GTK4 + Ruby desktop applications for a
 Hyprland (Wayland) system. Current apps:
 
 - **bar** — per-monitor status bar (layer-shell surface, cyberpunk neon theme)
@@ -28,7 +28,7 @@ Hyprland (Wayland) system. Current apps:
   layer-shell; deployed to /opt so the unprivileged greetd user can run it).
   See `ai-artifacts/greeter.md` for its design.
 
-**Tech Stack:** Ruby 3.4.7, GTK3, Zeitwerk, gtk-layer-shell (via GObject
+**Tech Stack:** Ruby 3.4.7, GTK4, Zeitwerk, gtk4-layer-shell (via GObject
 Introspection)
 
 ## Commands

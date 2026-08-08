@@ -1,2 +1,32 @@
 /* Bar-specific styles, layered over assets/base.css.
  * Selectors that only the bar uses migrate here from base.css over time. */
+
+/* MenuPopover items (network menu, audio sink picker) */
+.bar-menu-item {
+    padding: 8px 16px;
+    color: #e0e0ff;
+    background: none;
+    border: none;
+    box-shadow: none;
+    transition: all 0.2s ease;
+}
+
+.bar-menu-item:hover {
+    background-color: rgba(255, 107, 53, 0.2);
+    color: #ff6b35;
+    text-shadow: 0 0 8px rgba(255, 107, 53, 0.5);
+}
+
+.bar-menu-item:disabled,
+.bar-menu-header {
+    padding: 8px 16px;
+    color: #00f3ff;
+    background-color: rgba(0, 243, 255, 0.1);
+    text-shadow: 0 0 8px rgba(0, 243, 255, 0.3);
+}
+
+.bar-menu-item label,
+.bar-menu-header {
+    font-family: "Inconsolata Nerd Font Mono", "Inconsolata", monospace;
+    font-size: 14px;
+}

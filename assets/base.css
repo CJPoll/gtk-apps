@@ -280,35 +280,12 @@ button.pill.power-button.power:hover label {
     text-shadow: 0 0 15px rgba(255, 0, 102, 0.8);
 }
 
-/* Dropdown menus - Cyberpunk Neon styling */
-menu {
+/* Popovers (dropdown menus, combo lists) - Cyberpunk Neon styling */
+popover > contents {
     background-color: #0a0e27;
     border: 1px solid rgba(0, 102, 255, 0.3);
     border-radius: 8px;
     padding: 8px 0;
-}
-
-menu menuitem {
-    padding: 8px 16px;
-    color: #e0e0ff;
-    transition: all 0.2s ease;
-}
-
-menu menuitem:hover {
-    background-color: rgba(255, 107, 53, 0.2);
-    color: #ff6b35;
-    text-shadow: 0 0 8px rgba(255, 107, 53, 0.5);
-}
-
-menu menuitem:disabled {
-    color: #00f3ff;
-    background-color: rgba(0, 243, 255, 0.1);
-    text-shadow: 0 0 8px rgba(0, 243, 255, 0.3);
-}
-
-menu menuitem label {
-    font-family: "Inconsolata Nerd Font Mono", "Inconsolata", monospace;
-    font-size: 14px;
 }
 
 /* Tooltips - Cyberpunk Neon styling */
