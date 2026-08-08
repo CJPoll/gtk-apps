@@ -1,0 +1,74 @@
+# frozen_string_literal: true
+
+require 'shellwords'
+
+module Portland
+  module Domain
+    # The set of packages marked for installation or removal, and the emerge
+    # invocations that would carry the plan out. Pure bookkeeping: nothing
+    # here touches portage.
+    class EmergePlan
+      def initialize
+        @marks = {}
+      end
+
+      # Marking an atom with its current action again unmarks it.
+      def toggle(atom, action)
+        if @marks[atom] == action
+          @marks.delete(atom)
+        else
+          @marks[atom] = action
+        end
+      end
+
+      def action_for(atom)
+        @marks[atom]
+      end
+
+      def installs
+        atoms_marked(:install)
+      end
+
+      def removals
+        atoms_marked(:remove)
+      end
+
+      def empty?
+        @marks.empty?
+      end
+
+      def clear
+        @marks.clear
+      end
+
+      def summary
+        return 'Nothing marked' if empty?
+
+        parts = []
+        parts << "#{installs.size} to install" if installs.any?
+        parts << "#{removals.size} to remove" if removals.any?
+        parts.join(' · ')
+      end
+
+      # --ask keeps the final say in the terminal; --depclean removes a
+      # package only if nothing else depends on it, which is the safe
+      # default for interactive uninstalls.
+      def shell_commands
+        commands = []
+        commands << "sudo emerge --ask --verbose #{escaped(installs)}" if installs.any?
+        commands << "sudo emerge --ask --depclean #{escaped(removals)}" if removals.any?
+        commands
+      end
+
+      private
+
+      def atoms_marked(action)
+        @marks.select { |_, marked| marked == action }.keys
+      end
+
+      def escaped(atoms)
+        atoms.map { |atom| Shellwords.escape(atom) }.join(' ')
+      end
+    end
+  end
+end

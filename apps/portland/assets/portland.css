@@ -1,0 +1,47 @@
+/* Portland-specific styles, layered over assets/base.css. */
+
+.portland-root {
+  padding: 12px;
+}
+
+.package-row {
+  padding: 6px 10px;
+}
+
+.package-name {
+  font-weight: bold;
+}
+
+.package-description {
+  opacity: 0.7;
+  font-size: 12px;
+}
+
+.installed-badge {
+  color: #50fa7b;
+  font-size: 11px;
+  border: 1px solid #50fa7b;
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+
+.mark-install:checked {
+  background: #1f6feb;
+  color: #ffffff;
+}
+
+.mark-remove:checked {
+  background: #da3633;
+  color: #ffffff;
+}
+
+.plan-bar {
+  padding: 8px 4px 0 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.results-placeholder {
+  opacity: 0.5;
+  font-size: 14px;
+  padding: 24px;
+}
