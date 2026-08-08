@@ -43,13 +43,7 @@ module Bar
 
     def toggle_visibility
       @bars_visible = !@bars_visible
-      @windows.each do |window|
-        if @bars_visible
-          window.show
-        else
-          window.hide
-        end
-      end
+      @windows.each { |window| window.visible = @bars_visible }
     end
 
     def stylesheet_paths

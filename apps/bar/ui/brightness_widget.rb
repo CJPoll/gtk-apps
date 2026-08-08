@@ -22,10 +22,10 @@ module Bar
 
       def setup_ui
         @button = Gtk::Button.new(label: '')
-        @button.style_context.add_class('pill')
-        @button.style_context.add_class('brightness')
+        @button.add_css_class('pill')
+        @button.add_css_class('brightness')
 
-        pack_start(@button, expand: false, fill: false, padding: 0)
+        append(@button)
       end
 
       def start_timer
@@ -37,13 +37,13 @@ module Bar
         return hide_widget unless data
         return hide_widget if data['class'] == 'hidden'
 
-        show
+        self.visible = true
         @button.label = data['text']
         @button.set_tooltip_text(data['tooltip']&.gsub('\\n', "\n"))
       end
 
       def hide_widget
-        hide
+        self.visible = false
       end
 
       def fetch_data

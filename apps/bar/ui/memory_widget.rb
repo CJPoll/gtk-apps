@@ -22,10 +22,10 @@ module Bar
 
       def setup_ui
         @button = Gtk::Button.new(label: '')
-        @button.style_context.add_class('pill')
-        @button.style_context.add_class('memory')
+        @button.add_css_class('pill')
+        @button.add_css_class('memory')
 
-        pack_start(@button, expand: false, fill: false, padding: 0)
+        append(@button)
       end
 
       def start_timer

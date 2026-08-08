@@ -2,20 +2,20 @@
 
 module Bar
   module UI
-    class NetworkWidget < Gtk::EventBox
+    class NetworkWidget < Gtk::Box
       include GtkKit::Timers
 
       UPDATE_INTERVAL_SECONDS = 5
 
       def initialize
-        super
+        super(:horizontal, 0)
 
         @button = Gtk::Button.new(label: '')
-        @button.style_context.add_class('pill')
-        @button.style_context.add_class('network')
+        @button.add_css_class('pill')
+        @button.add_css_class('network')
         @wifi_interface = find_wifi_interface
 
-        add(@button)
+        append(@button)
 
         setup_events
         update_display
@@ -25,32 +25,23 @@ module Bar
       private
 
       def setup_events
-        @button.signal_connect('button-press-event') do |_widget, event|
-          show_network_menu(event) if event.button == 1
-          true
-        end
+        @button.signal_connect('clicked') { show_network_menu }
       end
 
-      def show_network_menu(event)
-        menu = Gtk::Menu.new
+      def show_network_menu
+        menu = MenuPopover.new(@button)
 
         # Current connection info
         status = get_network_status
         if status[:connected]
-          current_item = Gtk::MenuItem.new(label: "✓ #{status[:name]}")
-          current_item.sensitive = false
-          menu.append(current_item)
-
-          # Separator
-          menu.append(Gtk::SeparatorMenuItem.new)
+          menu.add_header("✓ #{status[:name]}")
+          menu.add_separator
         end
 
         # Scan for networks
-        scan_item = Gtk::MenuItem.new(label: '󰍉 Scan for networks...')
-        scan_item.signal_connect('activate') { trigger_scan }
-        menu.append(scan_item)
+        menu.add_item('󰍉 Scan for networks...') { trigger_scan }
 
-        menu.append(Gtk::SeparatorMenuItem.new)
+        menu.add_separator
 
         # Available networks from scan results
         networks = get_scan_results
@@ -60,23 +51,20 @@ module Bar
             next if status[:connected] && network[:ssid] == status[:name]
 
             icon = wifi_icon(network[:signal])
-            item = Gtk::MenuItem.new(label: "#{icon} #{network[:ssid]} (#{network[:signal]}%)")
-            item.signal_connect('activate') { connect_to_network(network[:ssid]) }
-            menu.append(item)
+            menu.add_item("#{icon} #{network[:ssid]} (#{network[:signal]}%)") do
+              connect_to_network(network[:ssid])
+            end
           end
 
-          menu.append(Gtk::SeparatorMenuItem.new)
+          menu.add_separator
         end
 
         # Disconnect option if connected
         if status[:connected] && status[:type] == :wifi
-          disconnect_item = Gtk::MenuItem.new(label: '󰖪 Disconnect')
-          disconnect_item.signal_connect('activate') { disconnect_wifi }
-          menu.append(disconnect_item)
+          menu.add_item('󰖪 Disconnect') { disconnect_wifi }
         end
 
-        menu.show_all
-        menu.popup_at_pointer(event)
+        menu.popup
       end
 
       def trigger_scan
@@ -190,7 +178,7 @@ module Bar
         if status[:connected]
           icon = status[:type] == :wifi ? wifi_icon(status[:signal]) : '󰈀'
           @button.label = icon
-          @button.style_context.remove_class('disconnected')
+          @button.remove_css_class('disconnected')
 
           tooltip = "#{status[:type] == :wifi ? 'WiFi' : 'Ethernet'}: #{status[:name]}"
           tooltip += "\nFrequency: #{status[:frequency]}" if status[:frequency]
@@ -199,7 +187,7 @@ module Bar
           @button.set_tooltip_text(tooltip)
         else
           @button.label = '󰌙 Disconnected'
-          @button.style_context.add_class('disconnected')
+          @button.add_css_class('disconnected')
           @button.set_tooltip_text('No network connection')
         end
       end

@@ -16,8 +16,8 @@ module Bar
       def initialize
         super(:horizontal, 0)
 
-        style_context.add_class('pill')
-        style_context.add_class('launchers')
+        add_css_class('pill')
+        add_css_class('launchers')
 
         setup_ui
       end
@@ -30,7 +30,7 @@ module Bar
           next unless launcher
 
           button = LauncherButton.new(launcher: launcher)
-          pack_start(button, expand: false, fill: false, padding: 0)
+          append(button)
         end
       end
     end

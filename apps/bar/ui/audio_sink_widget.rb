@@ -2,19 +2,19 @@
 
 module Bar
   module UI
-    class AudioSinkWidget < Gtk::EventBox
+    class AudioSinkWidget < Gtk::Box
       include GtkKit::Timers
 
       UPDATE_INTERVAL_SECONDS = 2
 
       def initialize
-        super
+        super(:horizontal, 0)
 
         @button = Gtk::Button.new(label: '')
-        @button.style_context.add_class('pill')
-        @button.style_context.add_class('audio-sink')
+        @button.add_css_class('pill')
+        @button.add_css_class('audio-sink')
 
-        add(@button)
+        append(@button)
 
         setup_events
         update_display
@@ -24,10 +24,7 @@ module Bar
       private
 
       def setup_events
-        @button.signal_connect('button-press-event') do |_widget, event|
-          show_sink_picker(event) if event.button == 1
-          true
-        end
+        @button.signal_connect('clicked') { show_sink_picker }
       end
 
       def start_timer
@@ -45,20 +42,15 @@ module Bar
         @button.set_tooltip_text("Audio: #{current_sink[:name]}")
       end
 
-      def show_sink_picker(event)
-        menu = Gtk::Menu.new
+      def show_sink_picker
+        menu = MenuPopover.new(@button)
 
         sinks = get_sinks
         current_id = get_current_sink&.dig(:id)
 
         sinks.each do |sink|
-          item = Gtk::MenuItem.new(label: "#{get_sink_icon(sink[:name])} #{short_name(sink[:name])}")
-
-          if sink[:id] == current_id
-            item.sensitive = false
-          end
-
-          item.signal_connect('activate') do
+          label = "#{get_sink_icon(sink[:name])} #{short_name(sink[:name])}"
+          menu.add_item(label, sensitive: sink[:id] != current_id) do
             if bluetooth_sink?(sink[:name])
               switch_to_a2dp
             else
@@ -66,12 +58,9 @@ module Bar
             end
             update_display
           end
-
-          menu.append(item)
         end
 
-        menu.show_all
-        menu.popup_at_pointer(event)
+        menu.popup
       end
 
       def get_current_sink

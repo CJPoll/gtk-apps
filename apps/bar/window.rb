@@ -16,8 +16,6 @@ module Bar
       setup_layer_shell
       setup_ui_shell
       setup_signals
-
-      show_all
     end
 
     private
@@ -56,28 +54,29 @@ module Bar
     def setup_ui_shell
       set_default_size(-1, BAR_HEIGHT)
 
-      @main_box = Gtk::Box.new(:horizontal, 4)
-      @main_box.style_context.add_class('bar-container')
+      # GTK4 Box has no center widget; CenterBox is the dedicated container.
+      @main_box = Gtk::CenterBox.new
+      @main_box.add_css_class('bar-container')
 
       # Create section containers (lightweight, no widgets yet)
       @left_box = Gtk::Box.new(:horizontal, 4)
-      @left_box.style_context.add_class('section-left')
+      @left_box.add_css_class('section-left')
       @left_box.valign = :center
 
       @center_box = Gtk::Box.new(:horizontal, 4)
-      @center_box.style_context.add_class('section-center')
+      @center_box.add_css_class('section-center')
       @center_box.halign = :center
       @center_box.valign = :center
 
       @right_box = Gtk::Box.new(:horizontal, 4)
-      @right_box.style_context.add_class('section-right')
+      @right_box.add_css_class('section-right')
       @right_box.valign = :center
 
-      @main_box.pack_start(@left_box, expand: false, fill: false, padding: 0)
-      @main_box.set_center_widget(@center_box)
-      @main_box.pack_end(@right_box, expand: false, fill: false, padding: 0)
+      @main_box.start_widget = @left_box
+      @main_box.center_widget = @center_box
+      @main_box.end_widget = @right_box
 
-      add(@main_box)
+      set_child(@main_box)
     end
 
     def populate_widgets
@@ -100,8 +99,7 @@ module Bar
     end
 
     def add_widget(container, widget)
-      container.pack_start(widget, expand: false, fill: false, padding: 0)
-      widget.show_all
+      container.append(widget)
     end
 
     def setup_signals

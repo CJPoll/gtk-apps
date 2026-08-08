@@ -25,7 +25,7 @@ module Launcher
       return unless @window && !@window.destroyed?
 
       @dock_visible = !@dock_visible
-      @dock_visible ? @window.show : @window.hide
+      @window.visible = @dock_visible
     end
 
     def stylesheet_paths

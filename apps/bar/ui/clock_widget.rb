@@ -20,10 +20,10 @@ module Bar
 
       def setup_ui
         @button = Gtk::Button.new(label: formatted_time)
-        @button.style_context.add_class('pill')
-        @button.style_context.add_class('clock')
+        @button.add_css_class('pill')
+        @button.add_css_class('clock')
 
-        pack_start(@button, expand: false, fill: false, padding: 0)
+        append(@button)
 
         setup_tooltip
       end

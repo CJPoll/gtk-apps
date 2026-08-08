@@ -2,20 +2,20 @@
 
 module Bar
   module UI
-    class VolumeWidget < Gtk::EventBox
+    class VolumeWidget < Gtk::Box
       include GtkKit::Timers
 
       UPDATE_INTERVAL_SECONDS = 1
       VOLUME_STEP = 5
 
       def initialize
-        super
+        super(:horizontal, 0)
 
         @button = Gtk::Button.new(label: '')
-        @button.style_context.add_class('pill')
-        @button.style_context.add_class('volume')
+        @button.add_css_class('pill')
+        @button.add_css_class('volume')
 
-        add(@button)
+        append(@button)
 
         setup_events
         update_display
@@ -25,21 +25,16 @@ module Bar
       private
 
       def setup_events
-        add_events(Gdk::EventMask::SCROLL_MASK)
-
         @button.signal_connect('clicked') do
           toggle_mute
         end
 
-        signal_connect('scroll-event') do |_widget, event|
-          case event.direction
-          when Gdk::ScrollDirection::UP
-            adjust_volume(VOLUME_STEP)
-          when Gdk::ScrollDirection::DOWN
-            adjust_volume(-VOLUME_STEP)
-          end
+        scroll = Gtk::EventControllerScroll.new(Gtk::EventControllerScrollFlags::VERTICAL)
+        scroll.signal_connect('scroll') do |_controller, _dx, dy|
+          adjust_volume(dy.negative? ? VOLUME_STEP : -VOLUME_STEP)
           true
         end
+        add_controller(scroll)
       end
 
       def start_timer
@@ -52,10 +47,10 @@ module Bar
 
         if muted
           @button.label = '󰝟 Muted'
-          @button.style_context.add_class('muted')
+          @button.add_css_class('muted')
         else
           @button.label = "󰕾 #{volume}%"
-          @button.style_context.remove_class('muted')
+          @button.remove_css_class('muted')
         end
 
         @button.set_tooltip_text("Volume: #{volume}%#{muted ? ' (Muted)' : ''}\nClick to toggle mute\nScroll to adjust")

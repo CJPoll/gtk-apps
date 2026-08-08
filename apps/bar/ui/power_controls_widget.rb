@@ -20,17 +20,17 @@ module Bar
       def setup_ui
         CONTROLS.each do |control|
           button = create_button(control)
-          pack_start(button, expand: false, fill: false, padding: 0)
+          append(button)
         end
       end
 
       def create_button(control)
         button = Gtk::Button.new(label: control[:icon])
-        button.style_context.add_class('pill')
-        button.style_context.add_class('power-button')
-        button.style_context.add_class(control[:css_class])
+        button.add_css_class('pill')
+        button.add_css_class('power-button')
+        button.add_css_class(control[:css_class])
         button.set_tooltip_text(control[:tooltip])
-        button.set_relief(:none)
+        button.has_frame = false
 
         button.signal_connect('clicked') do
           execute_command(control[:command])

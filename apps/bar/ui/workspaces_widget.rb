@@ -15,7 +15,7 @@ module Bar
         @buttons = {}
         @pulse_state = false
 
-        style_context.add_class('workspaces')
+        add_css_class('workspaces')
         setup_ui
         start_timer
         start_pulse_timer
@@ -40,13 +40,12 @@ module Bar
 
       def update_pulse_states
         @buttons.each_value do |button|
-          style = button.style_context
-          next unless style.has_class?('urgent')
+          next unless button.has_css_class?('urgent')
 
           if @pulse_state
-            style.add_class('pulse-bright')
+            button.add_css_class('pulse-bright')
           else
-            style.remove_class('pulse-bright')
+            button.remove_css_class('pulse-bright')
           end
         end
       end
@@ -70,35 +69,35 @@ module Bar
         # Remove buttons for workspaces that no longer exist
         @buttons.keys.each do |id|
           unless current_ids.include?(id)
-            @buttons[id].destroy
+            remove(@buttons[id])
             @buttons.delete(id)
           end
         end
 
         # Add or update buttons
-        workspaces.each_with_index do |workspace, index|
+        workspaces.each do |workspace|
           if @buttons[workspace.id]
             update_button(@buttons[workspace.id], workspace)
           else
-            button = create_button(workspace)
-            @buttons[workspace.id] = button
-            reorder_child(button, index)
+            @buttons[workspace.id] = create_button(workspace)
           end
         end
 
-        # Reorder all buttons to match workspace order
-        workspaces.each_with_index do |workspace, index|
+        # Walk the desired order, moving each button after the previous one.
+        previous = nil
+        workspaces.each do |workspace|
           button = @buttons[workspace.id]
-          reorder_child(button, index) if button
-        end
+          next unless button
 
-        show_all
+          reorder_child_after(button, previous)
+          previous = button
+        end
       end
 
       def create_button(workspace)
         button = Gtk::Button.new(label: workspace.display_name)
-        button.style_context.add_class('pill')
-        button.style_context.add_class('workspace-button')
+        button.add_css_class('pill')
+        button.add_css_class('workspace-button')
 
         update_button_state(button, workspace)
 
@@ -106,7 +105,7 @@ module Bar
           Compositor::Adapters::HyprlandIpc.switch_workspace(workspace.id)
         end
 
-        pack_start(button, expand: false, fill: false, padding: 0)
+        append(button)
         button
       end
 
@@ -116,18 +115,16 @@ module Bar
       end
 
       def update_button_state(button, workspace)
-        style = button.style_context
-
         if workspace.active
-          style.add_class('active')
+          button.add_css_class('active')
         else
-          style.remove_class('active')
+          button.remove_css_class('active')
         end
 
         if workspace.urgent
-          style.add_class('urgent')
+          button.add_css_class('urgent')
         else
-          style.remove_class('urgent')
+          button.remove_css_class('urgent')
         end
       end
     end

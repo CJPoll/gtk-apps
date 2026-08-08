@@ -8,8 +8,6 @@ module Launcher
 
       setup_layer_shell
       setup_ui
-
-      show_all
     end
 
     private
@@ -35,7 +33,7 @@ module Launcher
 
     def setup_ui
       @dock = UI::Dock.new
-      add(@dock)
+      set_child(@dock)
     end
   end
 end

@@ -10,8 +10,8 @@ module Bar
       def initialize(sni_host: nil)
         super(:horizontal, 4)
 
-        style_context.add_class('pill')
-        style_context.add_class('tray')
+        add_css_class('pill')
+        add_css_class('tray')
 
         @sni_host = sni_host
         @watcher = nil
@@ -20,7 +20,7 @@ module Bar
         @connection = nil
 
         # Start hidden until we have items
-        set_no_show_all(true)
+        self.visible = false
 
         setup_watcher
       end
@@ -49,7 +49,7 @@ module Bar
         @item_widgets.keys.each do |key|
           unless current_keys.include?(key)
             unsubscribe_item_signals(key)
-            @item_widgets[key].destroy
+            remove(@item_widgets[key])
             @item_widgets.delete(key)
           end
         end
@@ -63,17 +63,11 @@ module Bar
           next unless widget
 
           @item_widgets[key] = widget
-          pack_start(widget, expand: false, fill: false, padding: 0)
-          widget.show_all
+          append(widget)
         end
 
         # Hide tray when empty, show when items present
-        if @item_widgets.empty?
-          hide
-        else
-          show
-          children.each(&:show_all)
-        end
+        self.visible = @item_widgets.any?
       end
 
       def item_key(item)
@@ -84,28 +78,31 @@ module Bar
         props = @watcher.get_item_properties(item[:bus_name], item[:object_path])
         return nil if props.empty?
 
-        button = Gtk::EventBox.new
+        button = Gtk::Box.new(:horizontal, 0)
         image = create_icon_image(props)
         image.set_size_request(ICON_SIZE, ICON_SIZE)
 
-        button.add(image)
+        button.append(image)
         button.set_size_request(ICON_SIZE + 8, ICON_SIZE + 8)
-        button.style_context.add_class('tray-item')
+        button.add_css_class('tray-item')
 
         # Set tooltip - prefer Title, then ToolTipTitle, then Id
-        title = props['Title']
-        title = props['ToolTipTitle'] if title.nil? || title.empty?
-        title = props['Id'] if title.nil? || title.empty?
-        title ||= 'Unknown'
-        button.set_tooltip_text(title)
+        button.set_tooltip_text(item_title(props))
 
         # Handle clicks
         setup_item_events(button, item, props)
 
         # Subscribe to item changes
-        subscribe_to_item_signals(button, image, item)
+        subscribe_to_item_signals(button, item)
 
         button
+      end
+
+      def item_title(props)
+        title = props['Title']
+        title = props['ToolTipTitle'] if title.nil? || title.empty?
+        title = props['Id'] if title.nil? || title.empty?
+        title || 'Unknown'
       end
 
       def create_icon_image(props)
@@ -130,7 +127,14 @@ module Bar
         return icon if icon
 
         # Fallback icon
-        Gtk::Image.new(icon_name: 'application-x-executable', size: :menu)
+        themed_image('application-x-executable')
+      end
+
+      def themed_image(icon_name)
+        image = Gtk::Image.new
+        image.pixel_size = ICON_SIZE
+        image.set_from_icon_name(icon_name)
+        image
       end
 
       def try_load_icon(icon_name, icon_theme_path)
@@ -143,11 +147,10 @@ module Bar
         end
 
         # Fall back to system icon theme
-        icon_theme = Gtk::IconTheme.default
+        icon_theme = Gtk::IconTheme.get_for_display(Gdk::Display.default)
         return nil unless icon_theme.has_icon?(icon_name)
 
-        pixbuf = icon_theme.load_icon(icon_name, ICON_SIZE, :force_size)
-        Gtk::Image.new(pixbuf: pixbuf)
+        themed_image(icon_name)
       end
 
       def try_load_pixmap_icon(pixmaps)
@@ -160,7 +163,9 @@ module Bar
         return nil unless pixbuf
 
         scaled = pixbuf.scale_simple(ICON_SIZE, ICON_SIZE, GdkPixbuf::InterpType::BILINEAR)
-        Gtk::Image.new(pixbuf: scaled)
+        image = Gtk::Image.new(pixbuf: scaled)
+        image.pixel_size = ICON_SIZE
+        image
       end
 
       def create_pixbuf_from_data(pixmap)
@@ -201,9 +206,10 @@ module Bar
           path = File.join(theme_path, "#{icon_name}#{ext}")
           next unless File.exist?(path)
 
-          pixbuf = GdkPixbuf::Pixbuf.new(file: path)
-          scaled = pixbuf.scale_simple(ICON_SIZE, ICON_SIZE, GdkPixbuf::InterpType::BILINEAR)
-          return Gtk::Image.new(pixbuf: scaled)
+          image = Gtk::Image.new
+          image.pixel_size = ICON_SIZE
+          image.set_from_file(path)
+          return image
         end
 
         nil
@@ -213,111 +219,59 @@ module Bar
       end
 
       def setup_item_events(button, item, props)
-        button.add_events(Gdk::EventMask::BUTTON_PRESS_MASK)
         item_is_menu = props['ItemIsMenu'] == true
 
-        button.signal_connect('button-press-event') do |_widget, event|
-          x = event.x_root.to_i
-          y = event.y_root.to_i
+        gesture = Gtk::GestureClick.new
+        gesture.button = 0 # listen for any button
+        gesture.signal_connect('pressed') do |g, _n_press, x, y|
+          # SNI menu coordinates are best-effort hints; Wayland offers no
+          # global coordinates, so pass the click's widget-local position.
+          gx = x.to_i
+          gy = y.to_i
 
-          case event.button
+          case g.current_button
           when 1 # Left click
             if item_is_menu
-              @watcher.context_menu_item(item[:bus_name], item[:object_path], x, y)
+              @watcher.context_menu_item(item[:bus_name], item[:object_path], gx, gy)
             else
-              @watcher.activate_item(item[:bus_name], item[:object_path], x, y)
+              @watcher.activate_item(item[:bus_name], item[:object_path], gx, gy)
             end
           when 2 # Middle click
-            @watcher.secondary_activate_item(item[:bus_name], item[:object_path], x, y)
+            @watcher.secondary_activate_item(item[:bus_name], item[:object_path], gx, gy)
           when 3 # Right click
-            @watcher.context_menu_item(item[:bus_name], item[:object_path], x, y)
+            @watcher.context_menu_item(item[:bus_name], item[:object_path], gx, gy)
           end
-
-          true
         end
+        button.add_controller(gesture)
       end
 
-      def subscribe_to_item_signals(button, image, item)
+      ITEM_SIGNALS = {
+        'NewIcon' => :icon,
+        'NewStatus' => :icon,
+        'NewAttentionIcon' => :icon,
+        'NewOverlayIcon' => :icon,
+        'NewTitle' => :tooltip,
+        'NewToolTip' => :tooltip
+      }.freeze
+
+      def subscribe_to_item_signals(button, item)
         key = item_key(item)
-        @signal_subscriptions[key] = []
-
-        # Subscribe to NewIcon signal
-        sub_id = dbus_connection.signal_subscribe(
-          item[:bus_name],
-          'org.kde.StatusNotifierItem',
-          'NewIcon',
-          item[:object_path],
-          nil,
-          Gio::DBusSignalFlags::NONE
-        ) do |_conn, _sender, _path, _iface, _signal, _params|
-          on_main_thread { update_item_icon(image, item) }
+        @signal_subscriptions[key] = ITEM_SIGNALS.map do |signal_name, kind|
+          dbus_connection.signal_subscribe(
+            item[:bus_name],
+            'org.kde.StatusNotifierItem',
+            signal_name,
+            item[:object_path],
+            nil,
+            Gio::DBusSignalFlags::NONE
+          ) do |_conn, _sender, _path, _iface, _signal, _params|
+            if kind == :icon
+              on_main_thread { update_item_icon(button, item) }
+            else
+              on_main_thread { update_item_tooltip(button, item) }
+            end
+          end
         end
-        @signal_subscriptions[key] << sub_id
-
-        # Subscribe to NewTitle signal
-        sub_id = dbus_connection.signal_subscribe(
-          item[:bus_name],
-          'org.kde.StatusNotifierItem',
-          'NewTitle',
-          item[:object_path],
-          nil,
-          Gio::DBusSignalFlags::NONE
-        ) do |_conn, _sender, _path, _iface, _signal, _params|
-          on_main_thread { update_item_tooltip(button, item) }
-        end
-        @signal_subscriptions[key] << sub_id
-
-        # Subscribe to NewStatus signal
-        sub_id = dbus_connection.signal_subscribe(
-          item[:bus_name],
-          'org.kde.StatusNotifierItem',
-          'NewStatus',
-          item[:object_path],
-          nil,
-          Gio::DBusSignalFlags::NONE
-        ) do |_conn, _sender, _path, _iface, _signal, _params|
-          on_main_thread { update_item_icon(image, item) }
-        end
-        @signal_subscriptions[key] << sub_id
-
-        # Subscribe to NewAttentionIcon signal
-        sub_id = dbus_connection.signal_subscribe(
-          item[:bus_name],
-          'org.kde.StatusNotifierItem',
-          'NewAttentionIcon',
-          item[:object_path],
-          nil,
-          Gio::DBusSignalFlags::NONE
-        ) do |_conn, _sender, _path, _iface, _signal, _params|
-          on_main_thread { update_item_icon(image, item) }
-        end
-        @signal_subscriptions[key] << sub_id
-
-        # Subscribe to NewOverlayIcon signal
-        sub_id = dbus_connection.signal_subscribe(
-          item[:bus_name],
-          'org.kde.StatusNotifierItem',
-          'NewOverlayIcon',
-          item[:object_path],
-          nil,
-          Gio::DBusSignalFlags::NONE
-        ) do |_conn, _sender, _path, _iface, _signal, _params|
-          on_main_thread { update_item_icon(image, item) }
-        end
-        @signal_subscriptions[key] << sub_id
-
-        # Subscribe to NewToolTip signal
-        sub_id = dbus_connection.signal_subscribe(
-          item[:bus_name],
-          'org.kde.StatusNotifierItem',
-          'NewToolTip',
-          item[:object_path],
-          nil,
-          Gio::DBusSignalFlags::NONE
-        ) do |_conn, _sender, _path, _iface, _signal, _params|
-          on_main_thread { update_item_tooltip(button, item) }
-        end
-        @signal_subscriptions[key] << sub_id
       end
 
       def unsubscribe_item_signals(key)
@@ -337,12 +291,18 @@ module Bar
         @connection ||= Gio.bus_get_sync(Gio::BusType::SESSION)
       end
 
-      def update_item_icon(image, item)
+      # GTK4 images have no mutable pixbuf accessor; swap the image widget
+      # inside the item's box instead.
+      def update_item_icon(button, item)
         props = @watcher.get_item_properties(item[:bus_name], item[:object_path])
         return if props.empty?
 
         new_image = create_icon_image(props)
-        image.pixbuf = new_image.pixbuf if new_image.pixbuf
+        new_image.set_size_request(ICON_SIZE, ICON_SIZE)
+
+        old_image = button.first_child
+        button.remove(old_image) if old_image
+        button.append(new_image)
       rescue StandardError => e
         warn "TrayWidget: Failed to update icon: #{e.message}"
       end
@@ -351,11 +311,7 @@ module Bar
         props = @watcher.get_item_properties(item[:bus_name], item[:object_path])
         return if props.empty?
 
-        title = props['Title']
-        title = props['ToolTipTitle'] if title.nil? || title.empty?
-        title = props['Id'] if title.nil? || title.empty?
-        title ||= 'Unknown'
-        button.set_tooltip_text(title)
+        button.set_tooltip_text(item_title(props))
       rescue StandardError => e
         warn "TrayWidget: Failed to update tooltip: #{e.message}"
       end

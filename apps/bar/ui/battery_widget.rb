@@ -27,10 +27,10 @@ module Bar
 
       def setup_ui
         @button = Gtk::Button.new(label: '')
-        @button.style_context.add_class('pill')
-        @button.style_context.add_class('battery')
+        @button.add_css_class('pill')
+        @button.add_css_class('battery')
 
-        pack_start(@button, expand: false, fill: false, padding: 0)
+        append(@button)
       end
 
       def start_timer
@@ -47,11 +47,10 @@ module Bar
       def update_pulse_state
         return unless @is_critical
 
-        style = @button.style_context
         if @pulse_state
-          style.add_class('pulse-bright')
+          @button.add_css_class('pulse-bright')
         else
-          style.remove_class('pulse-bright')
+          @button.remove_css_class('pulse-bright')
         end
       end
 
@@ -60,7 +59,7 @@ module Bar
         return hide_widget unless data
         return hide_widget if data['class'] == 'hidden'
 
-        show
+        self.visible = true
         @button.label = data['text']
         @button.set_tooltip_text(data['tooltip']&.gsub('\\n', "\n"))
 
@@ -69,15 +68,14 @@ module Bar
       end
 
       def hide_widget
-        hide
+        self.visible = false
       end
 
       def update_style_class(css_class)
-        style = @button.style_context
         %w[charging plugged warning critical pulse-bright].each do |c|
-          style.remove_class(c)
+          @button.remove_css_class(c)
         end
-        style.add_class(css_class) if css_class && !css_class.empty?
+        @button.add_css_class(css_class) if css_class && !css_class.empty?
 
         # Track critical state for pulse animation
         @is_critical = (css_class == 'critical')

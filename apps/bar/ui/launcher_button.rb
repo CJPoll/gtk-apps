@@ -17,28 +17,28 @@ module Bar
       private
 
       def setup_ui
-        style_context.add_class('launcher')
+        add_css_class('launcher')
 
-        icon = create_icon
-        set_image(icon)
-        set_always_show_image(true)
-        set_relief(:none)
+        set_child(create_icon)
+        self.has_frame = false
 
         set_tooltip_text(@launcher.name)
       end
 
       def create_icon
-        icon_theme = Gtk::IconTheme.default
+        image = Gtk::Image.new
+        image.pixel_size = ICON_SIZE
 
-        pixbuf = if icon_theme.has_icon?(@launcher.icon_name)
-                   icon_theme.load_icon(@launcher.icon_name, ICON_SIZE, :force_size)
-                 elsif File.exist?(@launcher.icon_name)
-                   GdkPixbuf::Pixbuf.new(file: @launcher.icon_name, width: ICON_SIZE, height: ICON_SIZE)
-                 else
-                   icon_theme.load_icon('application-x-executable', ICON_SIZE, :force_size)
-                 end
+        icon_theme = Gtk::IconTheme.get_for_display(Gdk::Display.default)
+        if icon_theme.has_icon?(@launcher.icon_name)
+          image.set_from_icon_name(@launcher.icon_name)
+        elsif File.exist?(@launcher.icon_name)
+          image.set_from_file(@launcher.icon_name)
+        else
+          image.set_from_icon_name('application-x-executable')
+        end
 
-        Gtk::Image.new(pixbuf: pixbuf)
+        image
       end
 
       def setup_signals

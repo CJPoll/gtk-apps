@@ -2,7 +2,7 @@
 
 module Launcher
   module UI
-    class Dock < Gtk::EventBox
+    class Dock < Gtk::Box
       # Desktop file names (without .desktop extension)
       DOCK_APPS = %w[
         Alacritty
@@ -22,11 +22,11 @@ module Launcher
 
       # Height of the visual dock box (base size + padding + extra bottom)
       DOCK_BOX_HEIGHT = DockIcon::BASE_SIZE + 16 + 8
-      # Height of EventBox to accommodate max icon size extending above
+      # Height of the dock area to accommodate max icon size extending above
       DOCK_HEIGHT = DockIcon::MAX_SIZE + 24
 
       def initialize
-        super()
+        super(:horizontal, 0)
 
         @icons = []
         @icon_centers = [] # Cached center positions
@@ -39,6 +39,7 @@ module Launcher
         @overlay = Gtk::Overlay.new
         @overlay.set_halign(:center)
         @overlay.set_valign(:end)
+        @overlay.hexpand = true
 
         # Background container (full height, transparent)
         @bg_container = Gtk::Box.new(:vertical, 0)
@@ -46,56 +47,29 @@ module Launcher
 
         # Visual background (styled, fixed height at bottom)
         @background = Gtk::Box.new(:horizontal, 0)
-        @background.style_context.add_class('dock-background')
+        @background.add_css_class('dock-background')
         @background.set_size_request(-1, DOCK_BOX_HEIGHT)
-        @bg_container.pack_end(@background, expand: false, fill: true, padding: 0)
+        @background.vexpand = false
+        @bg_container.append(@background)
 
-        @overlay.add(@bg_container)
+        @overlay.child = @bg_container
 
         # Icon container (overlaid, can extend above background)
         @icon_box = Gtk::Box.new(:horizontal, 8)
-        @icon_box.style_context.add_class('dock-icons')
+        @icon_box.add_css_class('dock-icons')
         @icon_box.set_halign(:center)
         @icon_box.set_valign(:end)
         @overlay.add_overlay(@icon_box)
 
-        # Set fixed width after icons are added (prevents re-centering jitter)
-        signal_connect_after('map') do
-          # Lock the icon box width to its initial size
-          alloc = @icon_box.allocation
-          @icon_box.set_size_request(alloc.width, -1)
-          @background.set_size_request(alloc.width, DOCK_BOX_HEIGHT)
-          @bg_container.set_size_request(alloc.width, DOCK_HEIGHT)
-          false
-        end
-
-        add(@overlay)
+        append(@overlay)
 
         setup_icons
         setup_events
+        lock_geometry_after_map
       end
 
       def on_pointer_motion(cursor_x)
         update_magnification(cursor_x)
-      end
-
-      def on_icon_leave(detail)
-        # Check if we're still inside the dock
-        return if detail == Gdk::NotifyType::ANCESTOR
-
-        _window, x, y, _mask = window.get_device_position(
-          Gdk::Display.default.default_seat.pointer
-        )
-
-        # Only reset if pointer is outside dock bounds
-        # Allow y to extend below the dock (into the margin area at bottom of screen)
-        alloc = allocation
-        in_horizontal_bounds = x >= 0 && x <= alloc.width
-        in_vertical_bounds = y >= 0 # No lower bound - allow below dock
-
-        unless in_horizontal_bounds && in_vertical_bounds
-          reset_magnification
-        end
       end
 
       private
@@ -106,14 +80,28 @@ module Launcher
           next unless app_entry
 
           icon = DockIcon.new(app_entry: app_entry)
-          icon.dock = self
           @icons << icon
-          @icon_box.pack_start(icon, expand: false, fill: false, padding: 4)
+          icon.margin_start = 4
+          icon.margin_end = 4
+          @icon_box.append(icon)
         end
+      end
 
-        # Cache icon center positions after window is shown
+      # Lock the icon box width to its initial size so magnification does not
+      # re-center the row (jitter), and cache icon centers for the falloff
+      # curve. Runs one idle cycle after map, once the first layout has sizes.
+      def lock_geometry_after_map
         signal_connect_after('map') do
-          cache_icon_positions
+          GLib::Idle.add do
+            alloc = @icon_box.allocation
+            if alloc.width.positive?
+              @icon_box.set_size_request(alloc.width, -1)
+              @background.set_size_request(alloc.width, DOCK_BOX_HEIGHT)
+              @bg_container.set_size_request(alloc.width, DOCK_HEIGHT)
+              cache_icon_positions
+            end
+            false
+          end
           false
         end
       end
@@ -130,34 +118,15 @@ module Launcher
         end
       end
 
+      # One motion controller on the dock covers every child icon: GTK4
+      # delivers coordinates relative to this widget and treats the pointer
+      # as inside until it leaves the dock's whole subtree.
       def setup_events
-        add_events(Gdk::EventMask::POINTER_MOTION_MASK |
-                   Gdk::EventMask::LEAVE_NOTIFY_MASK |
-                   Gdk::EventMask::ENTER_NOTIFY_MASK)
-
-        signal_connect('motion-notify-event') do |widget, _event|
-          _window, x, _y, _mask = widget.window.get_device_position(
-            Gdk::Display.default.default_seat.pointer
-          )
-          on_pointer_motion(x)
-          false
-        end
-
-        signal_connect('enter-notify-event') do |widget, _event|
-          _window, x, _y, _mask = widget.window.get_device_position(
-            Gdk::Display.default.default_seat.pointer
-          )
-          on_pointer_motion(x)
-          false
-        end
-
-        signal_connect('leave-notify-event') do |_widget, event|
-          # Only reset if actually leaving the dock (not entering a child)
-          if event.detail != Gdk::NotifyType::INFERIOR
-            reset_magnification
-          end
-          false
-        end
+        motion = Gtk::EventControllerMotion.new
+        motion.signal_connect('enter') { |_c, x, _y| on_pointer_motion(x) }
+        motion.signal_connect('motion') { |_c, x, _y| on_pointer_motion(x) }
+        motion.signal_connect('leave') { reset_magnification }
+        add_controller(motion)
       end
 
       def update_magnification(cursor_x)
@@ -172,7 +141,7 @@ module Launcher
           # Calculate scale factor using cosine falloff for smooth effect
           if distance < MAGNIFICATION_RADIUS
             # Cosine falloff: 1.0 at center, 0.0 at edge of radius
-            scale = (Math.cos(distance / MAGNIFICATION_RADIUS * Math::PI / 2)) ** 2
+            scale = (Math.cos(distance / MAGNIFICATION_RADIUS * Math::PI / 2))**2
             icon.update_scale(scale)
           else
             icon.reset_scale
