@@ -47,11 +47,13 @@ module Portland
 
       sync_button = Gtk::Button.new(label: '⟳ Sync')
       sync_button.tooltip_text = 'Run sudo emerge --sync in a terminal'
-      sync_button.signal_connect('clicked') { Adapters::Terminal.run('sudo -A emerge --sync') }
+      sync_button.signal_connect('clicked') do
+        Adapters::Terminal.run('sudo -A emerge --sync') { refresh_current_view }
+      end
 
       world_button = Gtk::Button.new(label: 'World')
       world_button.tooltip_text = 'List deliberately installed packages (the world set) — dependencies excluded'
-      world_button.signal_connect('clicked') { @search_runner.list_world }
+      world_button.signal_connect('clicked') { show_world }
 
       updates_button = Gtk::Button.new(label: 'Updates')
       updates_button.tooltip_text = 'List installed packages with a newer version visible under your keywords'
@@ -93,13 +95,33 @@ module Portland
       query = @search_entry.text.strip
       return if query.empty?
 
+      @current_view = [:search, query]
       @search_runner.search(query)
     end
 
+    def show_world
+      @current_view = [:world]
+      @search_runner.list_world
+    end
+
     def scan_updates
+      @current_view = [:updates]
       @results_list.children.each(&:destroy)
       @placeholder.text = 'Scanning installed packages for available updates…'
       @search_runner.list_updates
+    end
+
+    # After an emerge finishes (or a sync), installed state, versions, and
+    # update availability have all potentially changed; re-run whatever
+    # listing is on screen against the new reality.
+    def refresh_current_view
+      @detail_fetcher.invalidate!
+
+      case @current_view&.first
+      when :search then @search_runner.search(@current_view[1])
+      when :world then @search_runner.list_world
+      when :updates then scan_updates
+      end
     end
 
     def render_results(packages)
@@ -241,7 +263,7 @@ module Portland
       commands = @plan.shell_commands
       return if commands.empty?
 
-      Adapters::Terminal.run(commands.join(' && '))
+      Adapters::Terminal.run(commands.join(' && ')) { refresh_current_view }
     end
 
     def clear_plan
