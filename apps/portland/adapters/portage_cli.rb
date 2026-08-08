@@ -53,6 +53,26 @@ module Portland
         []
       end
 
+      # The deliberately-installed set: exactly the atoms recorded in the
+      # world file, never dependencies.
+      def world_specs
+        path = '/var/lib/portage/world'
+        File.readable?(path) ? File.readlines(path, chomp: true) : []
+      end
+
+      # Description of the installed copy, from the installed-package
+      # database; nil when the package isn't actually installed.
+      def installed_description(atom)
+        category, name = atom.split('/', 2)
+        return nil unless category && name
+
+        pkg_dir = Dir.glob(File.join('/var/db/pkg', category, "#{name}-[0-9]*")).first
+        return nil unless pkg_dir
+
+        path = File.join(pkg_dir, 'DESCRIPTION')
+        File.readable?(path) ? File.read(path).strip : nil
+      end
+
       # Installed slots for one package, e.g. ["3.3", "3.2"].
       def installed_slots(atom)
         `qlist -IS #{Shellwords.escape(atom)} 2>/dev/null`
