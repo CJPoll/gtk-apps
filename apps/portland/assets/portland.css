@@ -66,6 +66,28 @@
   font-weight: bold;
 }
 
+.section-title {
+  font-weight: bold;
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.dep-change {
+  font-family: monospace;
+}
+
+.dep-note {
+  opacity: 0.55;
+  font-size: 11px;
+  padding-left: 24px;
+}
+
+.dep-error {
+  color: #f85149;
+  font-family: monospace;
+  font-size: 12px;
+}
+
 .plan-bar {
   padding: 8px 4px 0 4px;
   border-top: 1px solid rgba(255, 255, 255, 0.1);

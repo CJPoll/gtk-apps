@@ -23,6 +23,14 @@ module Portland
         pack_end(@clear, expand: false, fill: false, padding: 0)
       end
 
+      # Temporary state while a background step runs; the next update
+      # restores normal summary and sensitivity.
+      def busy(message)
+        @summary.text = message
+        @apply.sensitive = false
+        @clear.sensitive = false
+      end
+
       def update(plan, config_pending: false)
         parts = []
         parts << plan.summary unless plan.empty?

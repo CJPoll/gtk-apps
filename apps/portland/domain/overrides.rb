@@ -3,16 +3,19 @@
 module Portland
   module Domain
     # In-memory model of portland's own config files (the zz-portland file in
-    # package.use and package.accept_keywords). Toggles edit this model; Apply
-    # renders and installs it. Dirty means the model has diverged from what
-    # was last loaded from disk.
+    # package.use and package.accept_keywords, plus the profile
+    # use.stable.mask override file). Toggles edit this model; Apply renders
+    # and installs it. Dirty means the model has diverged from what was last
+    # loaded from disk.
     class Overrides
       USE_HEADER = 'USE flag overrides'
       KEYWORDS_HEADER = 'Accepted keywords'
+      STABLE_UNMASK_HEADER = 'Stable-mask overrides (a leading - removes a profile use.stable.mask entry)'
 
-      def initialize(use_content: '', keywords_content: '')
+      def initialize(use_content: '', keywords_content: '', stable_unmask_content: '')
         @use = parse_tokens(use_content)
         @keywords = parse_tokens(keywords_content)
+        @stable_unmasks = parse_unmasks(stable_unmask_content)
         @dirty = false
       end
 
@@ -38,6 +41,17 @@ module Portland
         @keywords.fetch(atom, {}).keys.first
       end
 
+      # Lifts a profile use.stable.mask entry so the flag becomes usable on
+      # stable-keyworded package versions.
+      def set_stable_unmask(flag)
+        @stable_unmasks[flag] = true
+        @dirty = true
+      end
+
+      def stable_unmasks
+        @stable_unmasks.keys
+      end
+
       def dirty?
         @dirty
       end
@@ -47,7 +61,7 @@ module Portland
       end
 
       def change_count
-        @use.values.sum(&:size) + @keywords.size
+        @use.values.sum(&:size) + @keywords.size + @stable_unmasks.size
       end
 
       def render_use
@@ -58,7 +72,22 @@ module Portland
         ConfigFileFormat.render(entries_from(@keywords, negate: false), header: KEYWORDS_HEADER)
       end
 
+      def render_stable_unmask
+        lines = ["# #{STABLE_UNMASK_HEADER}", '# Managed by portland; manual edits may be overwritten.', '']
+        @stable_unmasks.keys.sort.each { |flag| lines << "-#{flag}" }
+        "#{lines.join("\n")}\n"
+      end
+
       private
+
+      def parse_unmasks(content)
+        content.each_line.filter_map do |line|
+          line = line.strip
+          next if line.empty? || line.start_with?('#')
+
+          [line.delete_prefix('-'), true]
+        end.to_h
+      end
 
       def parse_tokens(content)
         ConfigFileFormat.parse(content, file: 'zz-portland').to_h do |entry|

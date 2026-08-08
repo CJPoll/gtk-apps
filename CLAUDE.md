@@ -13,6 +13,10 @@ Hyprland (Wayland) system. Current apps:
   and per-package config (USE flags, accepted keywords) backed by
   /etc/portage/package.*/ — portland reads all files there for state but
   writes only its own zz-portland files, which sort last and win conflicts.
+  Installs pre-resolve through emerge --pretend --autounmask against a
+  PORTAGE_CONFIGROOT sandbox (staged config applied), so dependency
+  keyword/USE/stable-mask requirements surface as an accept dialog instead
+  of a failed emerge.
   Ordinary window; root work (emerge, config installs) always goes through
   sudo -A, never runs inside the app.
 - **greeter** — planned: controller-navigable greetd greeter (fullscreen, not

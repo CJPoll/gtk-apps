@@ -11,6 +11,7 @@ module Portland
       @plan = Domain::EmergePlan.new
       @search_runner = Managers::SearchRunner.new(on_results: method(:render_results))
       @detail_fetcher = Managers::DetailFetcher.new
+      @resolver = Managers::DependencyResolver.new
       @overrides = load_overrides
       @packages = []
 
@@ -99,7 +100,8 @@ module Portland
     def load_overrides
       Domain::Overrides.new(
         use_content: Adapters::PortageCli.portland_use_content,
-        keywords_content: Adapters::PortageCli.portland_keywords_content
+        keywords_content: Adapters::PortageCli.portland_keywords_content,
+        stable_unmask_content: Adapters::PortageCli.portland_stable_unmask_content
       )
     end
 
@@ -122,16 +124,72 @@ module Portland
       update_plan_bar
     end
 
-    # Config changes install first (headless sudo — the askpass dialog
-    # appears); emerges follow in a terminal only once that succeeds, so a
-    # cancelled password never leaves emerge running against stale config.
+    # Installs resolve against a sandbox first (staged config included), so
+    # dependency keyword/USE/mask requirements surface as a prompt here
+    # instead of a failed emerge in the terminal.
     def apply_plan
+      if @plan.installs.empty?
+        install_config_then_emerge
+        return
+      end
+
+      @plan_bar.busy('Resolving dependencies…')
+      @resolver.resolve(@plan.installs, @overrides) do |result|
+        update_plan_bar
+        handle_resolution(result)
+      end
+    end
+
+    def handle_resolution(result)
+      unless result.anything?
+        if result.error
+          show_resolution_error(result.error)
+        else
+          install_config_then_emerge
+        end
+        return
+      end
+
+      accepted = UI::DependencyChangesDialog.new(parent: self, result: result).run_and_select
+      return unless accepted
+
+      accepted[:changes].each { |change| stage_suggested(change) }
+      accepted[:unmask_flags].each { |flag| @overrides.set_stable_unmask(flag) }
+      update_plan_bar
+      install_config_then_emerge
+    end
+
+    def stage_suggested(change)
+      if change.kind == :keyword
+        @overrides.set_keyword(change.atom_spec, change.tokens.first)
+      else
+        change.tokens.each do |token|
+          @overrides.set_use(change.atom_spec, token.delete_prefix('-'), !token.start_with?('-'))
+        end
+      end
+    end
+
+    def show_resolution_error(error)
+      dialog = Gtk::MessageDialog.new(parent: self, flags: :modal, type: :error,
+                                      buttons: :close,
+                                      message: 'emerge cannot resolve this install')
+      dialog.secondary_text = error
+      dialog.run
+      dialog.destroy
+    end
+
+    # Config installs first (headless sudo — the askpass dialog appears);
+    # emerges follow in a terminal only once that succeeds, so a cancelled
+    # password never leaves emerge running against stale config.
+    def install_config_then_emerge
       unless @overrides.dirty?
         run_emerges
         return
       end
 
-      Adapters::ConfigInstaller.install(@overrides.render_use, @overrides.render_keywords) do |success|
+      stable_unmask = @overrides.stable_unmasks.any? ? @overrides.render_stable_unmask : nil
+      Adapters::ConfigInstaller.install(@overrides.render_use, @overrides.render_keywords,
+                                        stable_unmask_content: stable_unmask) do |success|
         if success
           @overrides.saved!
           @detail_fetcher.invalidate!

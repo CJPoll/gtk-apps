@@ -21,6 +21,32 @@ module Portland
         ''
       end
 
+      # Dry-run resolution with autounmask, as the invoking user (pretend
+      # needs no root). Slow — seconds with backtracking — so callers run it
+      # off the main loop. configroot points emerge at a sandbox copy of
+      # /etc/portage so staged-but-uninstalled config participates.
+      def pretend_install(atoms, configroot: nil)
+        escaped = atoms.map { |atom| Shellwords.escape(atom) }.join(' ')
+        env = configroot ? "PORTAGE_CONFIGROOT=#{Shellwords.escape(configroot)} " : ''
+        `#{env}emerge --pretend --autounmask=y --autounmask-use=y --autounmask-backtrack=y --color=n --nospinner #{escaped} 2>&1`
+      rescue Errno::ENOENT
+        ''
+      end
+
+      # Whether any repo profile stable-masks this USE flag — the situation
+      # a /etc/portage/profile/use.stable.mask override entry can lift.
+      def stable_masked_flag?(flag)
+        md5_cache_dirs.any? do |dir|
+          Dir.glob(File.join(repo_root(dir), 'profiles', '**', 'use.stable.mask')).any? do |path|
+            File.foreach(path).any? { |line| line.strip == flag }
+          end
+        end
+      end
+
+      def portland_stable_unmask_content
+        read_if_exists('/etc/portage/profile/use.stable.mask')
+      end
+
       def installed_atoms
         `qlist -I 2>/dev/null`.split("\n")
       rescue Errno::ENOENT
