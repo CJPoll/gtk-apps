@@ -50,11 +50,16 @@ module Portland
         box.style_context.add_class('package-row')
 
         box.pack_start(build_text, expand: true, fill: true, padding: 0)
+        box.pack_start(badge(@package.note, 'update-badge'), expand: false, fill: false, padding: 0) if @package.note
         box.pack_start(badge('installed', 'installed-badge'), expand: false, fill: false, padding: 0) if @package.installed
         header_action = @package.installed ? :remove : :install
         box.pack_end(build_mark_toggle(atom: @package.atom, action: header_action,
                                        label: header_action == :remove ? 'Remove' : 'Install'),
                      expand: false, fill: false, padding: 0)
+        if @package.note
+          box.pack_end(build_mark_toggle(atom: @package.atom, action: :upgrade, label: 'Upgrade'),
+                       expand: false, fill: false, padding: 0)
+        end
         box
       end
 

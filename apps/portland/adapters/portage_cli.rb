@@ -92,6 +92,22 @@ module Portland
         {}
       end
 
+      INSTALLED_LINE = /\A(.+)-(\d[^:]*):(.+)\z/
+
+      # Every installed package at once: {atom => {slot => version}}. The
+      # version is the last hyphen-digit segment, so names containing
+      # digits (gtk4-layer-shell) split correctly.
+      def all_installed_slot_versions
+        `qlist -ISv 2>/dev/null`.split("\n").each_with_object({}) do |line, all|
+          match = INSTALLED_LINE.match(line)
+          next unless match
+
+          (all[match[1]] ||= {})[match[3]] = match[2]
+        end
+      rescue Errno::ENOENT
+        {}
+      end
+
       # {version:, slot:, keywords:} for every available version of a package,
       # read from each repo's pregenerated metadata cache (SLOT and KEYWORDS
       # already resolved — no ebuild sourcing). Overlays without a

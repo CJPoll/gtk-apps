@@ -53,9 +53,14 @@ module Portland
       world_button.tooltip_text = 'List deliberately installed packages (the world set) — dependencies excluded'
       world_button.signal_connect('clicked') { @search_runner.list_world }
 
+      updates_button = Gtk::Button.new(label: 'Updates')
+      updates_button.tooltip_text = 'List installed packages with a newer version visible under your keywords'
+      updates_button.signal_connect('clicked') { scan_updates }
+
       bar.pack_start(@search_entry, expand: true, fill: true, padding: 0)
       bar.pack_end(sync_button, expand: false, fill: false, padding: 0)
       bar.pack_end(world_button, expand: false, fill: false, padding: 0)
+      bar.pack_end(updates_button, expand: false, fill: false, padding: 0)
       bar
     end
 
@@ -63,10 +68,10 @@ module Portland
       @results_list = Gtk::ListBox.new
       @results_list.selection_mode = :none
 
-      placeholder = Gtk::Label.new('Search for packages to get started')
-      placeholder.style_context.add_class('results-placeholder')
-      placeholder.show
-      @results_list.set_placeholder(placeholder)
+      @placeholder = Gtk::Label.new('Search for packages to get started')
+      @placeholder.style_context.add_class('results-placeholder')
+      @placeholder.show
+      @results_list.set_placeholder(@placeholder)
 
       scrolled = Gtk::ScrolledWindow.new
       scrolled.set_policy(:never, :automatic)
@@ -81,7 +86,14 @@ module Portland
       @search_runner.search(query)
     end
 
+    def scan_updates
+      @results_list.children.each(&:destroy)
+      @placeholder.text = 'Scanning installed packages for available updates…'
+      @search_runner.list_updates
+    end
+
     def render_results(packages)
+      @placeholder.text = packages.empty? ? 'Nothing found' : 'Search for packages to get started'
       @packages = packages
       @results_list.children.each(&:destroy)
 

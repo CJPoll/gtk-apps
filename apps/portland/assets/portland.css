@@ -40,6 +40,14 @@
   color: #ffffff;
 }
 
+.update-badge {
+  color: #3fb950;
+  font-size: 11px;
+  border: 1px solid #3fb950;
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+
 .slot-list {
   padding: 4px 10px 8px 26px;
 }
