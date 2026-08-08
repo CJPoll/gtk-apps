@@ -13,8 +13,11 @@ module Portland
       super + [File.join(__dir__, 'assets', 'portland.css')]
     end
 
+    # Launching portland while an instance is running forwards the second
+    # launch here as another 'activate'; present the existing window rather
+    # than stacking a new one per launch.
     def on_activate
-      @window = Window.new(application: self)
+      @window = Window.new(application: self) if @window.nil? || @window.destroyed?
       @window.present
     end
 

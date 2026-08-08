@@ -18,6 +18,7 @@ module Bar
       @sni_host = nil
       @bars_visible = true
       @events = nil
+      @activated = false
       setup_unix_signals
     end
 
@@ -51,6 +52,13 @@ module Bar
     end
 
     def on_activate
+      # Re-activation (a second launch forwarded to this instance) has
+      # nothing to add: bars already exist per monitor and the event watch
+      # is running.
+      return if @activated
+
+      @activated = true
+
       monitors = await_monitors
 
       if monitors.empty?

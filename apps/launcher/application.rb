@@ -32,8 +32,12 @@ module Launcher
       super + [File.join(__dir__, 'assets', 'launcher.css')]
     end
 
+    # Re-activation (a second launch forwarded to this instance) presents
+    # the existing dock — and un-hides it, so a stray relaunch can't leave
+    # the visibility flag out of sync.
     def on_activate
-      @window = Window.new(application: self)
+      @window = Window.new(application: self) if @window.nil? || @window.destroyed?
+      @dock_visible = true
       @window.present
     end
 

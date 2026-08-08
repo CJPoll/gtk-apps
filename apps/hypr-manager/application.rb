@@ -13,8 +13,10 @@ module HyprManager
       super + [File.join(__dir__, 'assets', 'hypr-manager.css')]
     end
 
+    # Re-activation (a second launch forwarded to this instance) presents
+    # the existing window rather than stacking a new one.
     def on_activate
-      @window = Window.new(application: self)
+      @window = Window.new(application: self) if @window.nil? || @window.destroyed?
       @window.present
     end
 
