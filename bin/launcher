@@ -2,6 +2,11 @@
 
 export PATH="${ASDF_DATA_DIR:-/home/cjpoll/.asdf}/shims:/home/cjpoll/bin/:$PATH"
 
+# gtk4-layer-shell must interpose libwayland-client symbols before GTK
+# connects to the compositor; loaded via GObject Introspection it arrives
+# too late, so preload it (github.com/wmww/gtk4-layer-shell linking.md).
+export LD_PRELOAD=/usr/lib64/libgtk4-layer-shell.so
+
 ROOT="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
 cd "$ROOT"
 mkdir -p logs
