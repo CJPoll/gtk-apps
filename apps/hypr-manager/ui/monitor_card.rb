@@ -6,12 +6,12 @@ module HyprManager
     # selectors, and the workspaces bound to it. The header is a drag handle
     # for left-right reordering; the whole card accepts drops of workspace
     # chips (bind here) and other cards (take their slot).
-    class MonitorCard < Gtk::EventBox
+    class MonitorCard < Gtk::Box
       PREVIEW_SCALE = 14
 
       def initialize(monitor, workspace_ids:, on_reorder:, on_mode_change:,
                      on_transform_change:, on_assign:)
-        super()
+        super(:vertical, 6)
         @monitor = monitor
         @on_reorder = on_reorder
         @on_mode_change = on_mode_change
@@ -25,31 +25,27 @@ module HyprManager
       private
 
       def build(workspace_ids)
-        box = Gtk::Box.new(:vertical, 6)
-        box.style_context.add_class('monitor-card')
+        add_css_class('monitor-card')
 
-        box.pack_start(build_handle, expand: false, fill: false, padding: 0)
-        box.pack_start(build_preview, expand: false, fill: false, padding: 0)
-        box.pack_start(build_mode_combo, expand: false, fill: false, padding: 0)
-        box.pack_start(build_transform_combo, expand: false, fill: false, padding: 0)
-        box.pack_start(build_chips(workspace_ids), expand: false, fill: false, padding: 0)
-
-        add(box)
+        append(build_handle)
+        append(build_preview)
+        append(build_mode_combo)
+        append(build_transform_combo)
+        append(build_chips(workspace_ids))
       end
 
       def build_handle
-        handle = Gtk::EventBox.new
         label = Gtk::Label.new("⣿ #{@monitor.name} — #{short_description}")
         label.ellipsize = :end
-        label.style_context.add_class('monitor-handle')
-        handle.add(label)
+        label.add_css_class('monitor-handle')
 
-        handle.drag_source_set(Gdk::ModifierType::BUTTON1_MASK,
-                               DragPayload::TARGETS, Gdk::DragAction::MOVE)
-        handle.signal_connect('drag-data-get') do |_widget, _context, data, _info, _time|
-          data.text = DragPayload.monitor(@monitor.description)
+        source = Gtk::DragSource.new
+        source.actions = :move
+        source.signal_connect('prepare') do |_source, _x, _y|
+          Gdk::ContentProvider.new(DragPayload.monitor(@monitor.description))
         end
-        handle
+        label.add_controller(source)
+        label
       end
 
       def short_description
@@ -58,15 +54,16 @@ module HyprManager
 
       def build_preview
         preview = Gtk::Box.new(:vertical, 0)
-        preview.style_context.add_class('screen-preview')
+        preview.add_css_class('screen-preview')
         preview.set_size_request(@monitor.effective_width / PREVIEW_SCALE,
                                  @monitor.effective_height / PREVIEW_SCALE)
         preview.halign = :center
 
         label = Gtk::Label.new(@monitor.mode_string)
-        label.style_context.add_class('screen-preview-label')
+        label.add_css_class('screen-preview-label')
         label.valign = :center
-        preview.pack_start(label, expand: true, fill: true, padding: 0)
+        label.vexpand = true
+        preview.append(label)
         preview
       end
 
@@ -100,29 +97,31 @@ module HyprManager
 
       def build_chips(workspace_ids)
         row = Gtk::Box.new(:horizontal, 4)
-        row.style_context.add_class('chip-row')
+        row.add_css_class('chip-row')
 
         if workspace_ids.empty?
           hint = Gtk::Label.new('drop workspaces here')
-          hint.style_context.add_class('chip-hint')
-          row.pack_start(hint, expand: false, fill: false, padding: 0)
+          hint.add_css_class('chip-hint')
+          row.append(hint)
         else
           workspace_ids.each do |workspace_id|
-            row.pack_start(WorkspaceChip.new(workspace_id), expand: false, fill: false, padding: 0)
+            row.append(WorkspaceChip.new(workspace_id))
           end
         end
         row
       end
 
       def setup_drop
-        drag_dest_set(Gtk::DestDefaults::ALL, DragPayload::TARGETS, Gdk::DragAction::MOVE)
-        signal_connect('drag-data-received') do |_widget, _context, _x, _y, data, _info, _time|
-          kind, payload = DragPayload.decode(data.text.to_s)
+        target = Gtk::DropTarget.new(DragPayload::STRING_TYPE, :move)
+        target.signal_connect('drop') do |_target, value, _x, _y|
+          kind, payload = DragPayload.decode_drop(value)
           case kind
           when :workspace then @on_assign.call(payload, @monitor.description)
           when :monitor then @on_reorder.call(payload, @monitor.description)
           end
+          !kind.nil?
         end
+        add_controller(target)
       end
     end
   end

@@ -3,35 +3,38 @@
 module HyprManager
   module UI
     # Workspaces not bound to any monitor. Dropping a chip here unbinds it.
-    class ChipTray < Gtk::EventBox
+    class ChipTray < Gtk::Box
       def initialize(workspace_ids, on_unassign:)
-        super()
+        super(:horizontal, 6)
         @on_unassign = on_unassign
 
-        row = Gtk::Box.new(:horizontal, 6)
-        row.style_context.add_class('chip-tray')
+        add_css_class('chip-tray')
 
         label = Gtk::Label.new('Unassigned workspaces:')
-        label.style_context.add_class('chip-tray-label')
-        row.pack_start(label, expand: false, fill: false, padding: 0)
+        label.add_css_class('chip-tray-label')
+        append(label)
 
         if workspace_ids.empty?
           hint = Gtk::Label.new('none — drop a chip here to unbind it')
-          hint.style_context.add_class('chip-hint')
-          row.pack_start(hint, expand: false, fill: false, padding: 0)
+          hint.add_css_class('chip-hint')
+          append(hint)
         else
           workspace_ids.each do |workspace_id|
-            row.pack_start(WorkspaceChip.new(workspace_id), expand: false, fill: false, padding: 0)
+            append(WorkspaceChip.new(workspace_id))
           end
         end
 
-        add(row)
-
-        drag_dest_set(Gtk::DestDefaults::ALL, DragPayload::TARGETS, Gdk::DragAction::MOVE)
-        signal_connect('drag-data-received') do |_widget, _context, _x, _y, data, _info, _time|
-          kind, payload = DragPayload.decode(data.text.to_s)
-          @on_unassign.call(payload) if kind == :workspace
+        target = Gtk::DropTarget.new(DragPayload::STRING_TYPE, :move)
+        target.signal_connect('drop') do |_target, value, _x, _y|
+          kind, payload = DragPayload.decode_drop(value)
+          if kind == :workspace
+            @on_unassign.call(payload)
+            true
+          else
+            false
+          end
         end
+        add_controller(target)
       end
     end
   end

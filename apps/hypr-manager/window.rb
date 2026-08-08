@@ -14,56 +14,57 @@ module HyprManager
 
       setup_ui
       render
-      show_all
     end
 
     private
 
     def setup_ui
       root = Gtk::Box.new(:vertical, 12)
-      root.style_context.add_class('hypr-root')
+      root.add_css_class('hypr-root')
 
       heading = Gtk::Label.new('Drag cards to reorder displays · drag workspace chips onto a display to bind them')
       heading.halign = :start
-      heading.style_context.add_class('heading-note')
-      root.pack_start(heading, expand: false, fill: false, padding: 0)
+      heading.add_css_class('heading-note')
+      root.append(heading)
 
       @strip = Gtk::Box.new(:horizontal, 12)
       @strip.valign = :start
       strip_scroll = Gtk::ScrolledWindow.new
       strip_scroll.set_policy(:automatic, :never)
-      strip_scroll.add(@strip)
-      root.pack_start(strip_scroll, expand: true, fill: true, padding: 0)
+      strip_scroll.child = @strip
+      strip_scroll.vexpand = true
+      root.append(strip_scroll)
 
       @tray_holder = Gtk::Box.new(:vertical, 0)
-      root.pack_start(@tray_holder, expand: false, fill: false, padding: 0)
+      root.append(@tray_holder)
 
-      root.pack_end(build_action_bar, expand: false, fill: false, padding: 0)
-      add(root)
+      root.append(build_action_bar)
+      set_child(root)
     end
 
     def build_action_bar
       bar = Gtk::Box.new(:horizontal, 8)
-      bar.style_context.add_class('plan-bar')
+      bar.add_css_class('plan-bar')
 
       @status = Gtk::Label.new('')
       @status.halign = :start
-      bar.pack_start(@status, expand: true, fill: true, padding: 0)
+      @status.hexpand = true
+      bar.append(@status)
 
       @save = Gtk::Button.new(label: 'Save & Reload')
-      @save.style_context.add_class('suggested-action')
+      @save.add_css_class('suggested-action')
       @save.signal_connect('clicked') { save }
 
       @revert = Gtk::Button.new(label: 'Revert')
       @revert.signal_connect('clicked') { revert }
 
-      bar.pack_end(@save, expand: false, fill: false, padding: 0)
-      bar.pack_end(@revert, expand: false, fill: false, padding: 0)
+      bar.append(@revert)
+      bar.append(@save)
       bar
     end
 
     def render
-      @strip.children.each(&:destroy)
+      clear_children(@strip)
       @state.layout.monitors.each do |monitor|
         card = UI::MonitorCard.new(
           monitor,
@@ -73,17 +74,19 @@ module HyprManager
           on_transform_change: method(:change_transform),
           on_assign: method(:assign)
         )
-        @strip.pack_start(card, expand: false, fill: false, padding: 0)
+        @strip.append(card)
       end
 
-      @tray_holder.children.each(&:destroy)
-      @tray_holder.add(UI::ChipTray.new(@state.assignments.unassigned, on_unassign: method(:unassign)))
+      clear_children(@tray_holder)
+      @tray_holder.append(UI::ChipTray.new(@state.assignments.unassigned, on_unassign: method(:unassign)))
 
       @status.text = @dirty ? 'Unsaved changes' : 'In sync with ~/hyprland.local.conf'
       @save.sensitive = @dirty
       @revert.sensitive = @dirty
-      @strip.show_all
-      @tray_holder.show_all
+    end
+
+    def clear_children(box)
+      box.remove(box.first_child) while box.first_child
     end
 
     def mutated
