@@ -38,6 +38,11 @@ module Compositor
       def reload
         system('hyprctl', 'reload', out: File::NULL, err: File::NULL)
       end
+
+      def move_workspace_to_monitor(workspace_id, monitor_name)
+        system('hyprctl', 'dispatch', 'moveworkspacetomonitor',
+               workspace_id.to_s, monitor_name, out: File::NULL, err: File::NULL)
+      end
     end
   end
 end

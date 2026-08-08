@@ -31,6 +31,10 @@ module HyprManager
         WORKSPACE_IDS - @assignments.keys
       end
 
+      def to_h
+        @assignments.dup
+      end
+
       def config_lines
         @assignments.sort.map do |workspace_id, description|
           "workspace = #{workspace_id}, monitor:desc:#{description}"

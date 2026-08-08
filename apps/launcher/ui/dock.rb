@@ -45,7 +45,13 @@ module Launcher
         @bg_container = Gtk::Box.new(:vertical, 0)
         @bg_container.set_valign(:end)
 
-        # Visual background (styled, fixed height at bottom)
+        # Visual background (styled, fixed height at bottom). GTK4 boxes
+        # pack from the start, so an expanding spacer above the background
+        # pins it to the container's bottom edge — GTK3's pack_end.
+        spacer = Gtk::Box.new(:vertical, 0)
+        spacer.vexpand = true
+        @bg_container.append(spacer)
+
         @background = Gtk::Box.new(:horizontal, 0)
         @background.add_css_class('dock-background')
         @background.set_size_request(-1, DOCK_BOX_HEIGHT)
