@@ -4,38 +4,95 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Widgets is a GTK3-based desktop widget system for Wayland compositors. It uses gtk-layer-shell to create layer surfaces (status bars, floating widgets, overlays) that integrate with the Wayland desktop shell protocol.
+This repository is a monorepo of GTK3 + Ruby desktop applications for a
+Hyprland (Wayland) system. Current apps:
 
-**Tech Stack:** Ruby 3.4.7, GTK3, gtk-layer-shell (via GObject Introspection)
+- **bar** — per-monitor status bar (layer-shell surface, cyberpunk neon theme)
+- **launcher** — Mac-style dock with icon magnification (layer-shell surface)
+- **greeter** — planned: controller-navigable greetd greeter (fullscreen, not
+  layer-shell; deployed to /opt so the unprivileged greetd user can run it).
+  See `ai-artifacts/greeter.md` for its design.
+
+**Tech Stack:** Ruby 3.4.7, GTK3, Zeitwerk, gtk-layer-shell (via GObject
+Introspection)
 
 ## Commands
 
 ```bash
-# Run the application
-./run
+# Run apps (also the Hyprland exec-once entry points)
+./bin/bar
+./bin/launcher
 
-# Run tests
-rake test
-
-# Run a single test file
-ruby -Itest test/example_test.rb
-
-# Run a single test method
-ruby -Itest test/example_test.rb -n test_method_name
+# Signals (bound to Hyprland keys)
+pkill -SIGUSR1 -f 'apps/bar/main.rb'       # toggle bar visibility
+pkill -SIGUSR2 -f 'apps/bar/main.rb'       # reload bar CSS
+pkill -SIGUSR1 -f 'apps/launcher/main.rb'  # toggle dock visibility
 ```
+
+`bin/*` scripts resolve the repo root from their own location, set up the asdf
+PATH, and log to `logs/<app>.log` (truncated per launch, because Hyprland
+discards exec-once stderr).
+
+## Repository Layout
+
+```
+bin/                      # executable entry points (bash wrappers)
+apps/
+  <app>/
+    main.rb               # boot: requires, Zeitwerk loader, App.run
+    application.rb        # <App>::Application < GtkKit::Application
+    window.rb             # <App>::Window
+    ui/  adapters/  domain/  managers/   # app-private buckets
+    assets/<app>.css      # app CSS, layered over assets/base.css
+lib/                      # shared code ONLY — nothing app-specific
+  gtk_kit/                # GTK plumbing shared by every app
+    application.rb        #   lifecycle shell: dark theme + stylesheet stack
+    layer_shell.rb        #   opt-in GObject Introspection bootstrap
+    stylesheet.rb         #   ordered CSS providers, reloadable in place
+    timers.rb             #   widget-lifetime-safe GLib timers/idle helpers
+  compositor/             # Hyprland/GDK integration (IPC, event socket, monitors)
+services/                 # headless daemons (planned: uinput gamepad translator)
+assets/base.css           # shared design tokens
+dist/                     # build output for /opt deployment (gitignored)
+```
+
+## Code Loading (Zeitwerk)
+
+Apps use Zeitwerk autoloading — there are **no require manifests**. Each
+`apps/<app>/main.rb` pushes two roots:
+
+- `lib/` → top-level namespaces (`GtkKit::…`, `Compositor::…`)
+- `apps/<app>/` → the app namespace (`Bar::…`, `Launcher::…`)
+
+Rules that follow from this:
+
+- **File path must equal constant path**: `apps/bar/ui/clock_widget.rb`
+  defines `Bar::UI::ClockWidget`; `lib/gtk_kit/timers.rb` defines
+  `GtkKit::Timers`. Renaming a class means renaming its file.
+- The `ui` directory maps to `UI` via an inflection declared in each
+  `main.rb`. New acronym directories need the same treatment.
+- Adding a file is enough — never add `require`/`require_relative` for
+  project code. Load order is not a concern; class-body references to other
+  constants autoload them.
+- Deployed apps (the greeter) call `loader.eager_load` so any naming
+  violation fails at startup, not mid-session.
 
 ## Architecture
 
 ### Hexagonal Architecture with Domain Boundaries
 
-The codebase is organized into domains, each following the 4-bucket architecture pattern:
+Each app follows the 4-bucket pattern:
 
 | Bucket | Purpose | Location |
 |--------|---------|----------|
-| **UI/View** | GTK widgets, presentation | `lib/<domain>/ui/` |
-| **Adapters** | Side effects (IPC, filesystem, D-Bus) | `lib/<domain>/adapters/` |
-| **Domain** | Pure, testable business logic | `lib/<domain>/domain/` |
-| **Managers** | Orchestration between buckets | `lib/<domain>/managers/` |
+| **UI/View** | GTK widgets, presentation | `apps/<app>/ui/` |
+| **Adapters** | Side effects (IPC, filesystem, D-Bus) | `apps/<app>/adapters/` |
+| **Domain** | Pure, testable business logic | `apps/<app>/domain/` |
+| **Managers** | Orchestration between buckets | `apps/<app>/managers/` |
+
+Code shared between apps lives in `lib/` under its own namespace
+(`Compositor` for Hyprland integration, `GtkKit` for GTK plumbing). Move
+code to `lib/` only when a second app actually needs it.
 
 ### Bucket Responsibilities
 
@@ -46,7 +103,7 @@ The codebase is organized into domains, each following the 4-bucket architecture
 - Never contain business logic or directly call adapters
 
 **Adapters** - Side effects boundary:
-- Compositor IPC (Hyprland, Sway socket communication)
+- Compositor IPC (Hyprland socket communication)
 - D-Bus integration (notifications, system tray)
 - File I/O, network requests
 - Return pure data structures, never GTK objects
@@ -61,50 +118,17 @@ The codebase is organized into domains, each following the 4-bucket architecture
 - Handle async coordination (polling, event subscriptions)
 - Manage component lifecycle
 
-### Directory Structure
-
-```
-widgets.rb                  # Entry point - loads GtkLayerShell, creates WidgetsApplication
-lib/
-  widgets_application.rb    # GTK Application lifecycle
-  widgets_window.rb         # Main bar window - layer shell setup, section layout
-
-  bar/                      # Status bar domain (future)
-    domain/
-    adapters/
-    managers/
-    ui/
-
-  compositor/               # Compositor integration domain (future)
-    domain/
-    adapters/
-      hyprland_ipc.rb       # Hyprland socket adapter
-    managers/
-    ui/
-```
-
 ### Layer Shell Integration
 
-GtkLayerShell is loaded via GObject Introspection at startup:
-
-```ruby
-module GtkLayerShell
-  class Loader < GObjectIntrospection::Loader
-  end
-  loader = Loader.new(self)
-  loader.load('GtkLayerShell')
-end
-```
+Layer-shell apps (bar, launcher) call `GtkKit::LayerShell.load!` in their
+`main.rb`, which defines the top-level `GtkLayerShell` module via GObject
+Introspection. Fullscreen apps (the greeter) skip it.
 
 Key concepts:
 - **Layer**: `BACKGROUND`, `BOTTOM`, `TOP`, `OVERLAY` (z-order)
 - **Anchors**: `Edge::TOP`, `Edge::BOTTOM`, `Edge::LEFT`, `Edge::RIGHT` (screen edges)
 - **Exclusive zone**: Reserved space that windows avoid
 - **Margins**: Offset from anchored edges
-
-### Domain Boundaries
-
-Domains communicate through WidgetsWindow using callbacks and GTK signals.
 
 ## Code Patterns
 
@@ -155,18 +179,14 @@ Window = Struct.new(:id, :title, :class_name, :focused, keyword_init: true)
 
 ### GLib Main Loop Integration
 
-For periodic updates (clock, polling):
-```ruby
-GLib::Timeout.add_seconds(1) do
-  update_display
-  true  # Continue timer
-end
-```
+Widgets `include GtkKit::Timers` and schedule through it — never through
+`GLib::Timeout`/`GLib::Idle` directly. The helpers tie a callback's life to
+its widget's, so a destroyed widget's timers retire instead of crashing the
+main loop:
 
-For thread-safe UI updates from adapters:
 ```ruby
-GLib::Idle.add do
-  @label.text = new_value
-  false  # Run once
-end
+every_seconds(1) { update_display }   # repeating
+every_ms(600)    { pulse }            # sub-second repeating
+after_ms(1000)   { update_display }   # one-shot
+on_main_thread   { update_display }   # hop back from a worker thread / D-Bus
 ```

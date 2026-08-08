@@ -3,7 +3,7 @@
 module Bar
   module UI
     class WorkspacesWidget < Gtk::Box
-      include WidgetTimers
+      include GtkKit::Timers
 
       UPDATE_INTERVAL_SECONDS = 1
       PULSE_INTERVAL_MS = 750

@@ -3,7 +3,7 @@
 module Bar
   module UI
     class ClockWidget < Gtk::Box
-      include WidgetTimers
+      include GtkKit::Timers
 
       FORMAT_FULL = '%Y/%m/%d %I:%M %p'
       FORMAT_SHORT = '%I:%M:%S %p'

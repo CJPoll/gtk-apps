@@ -3,7 +3,7 @@
 module Bar
   module UI
     class VolumeWidget < Gtk::EventBox
-      include WidgetTimers
+      include GtkKit::Timers
 
       UPDATE_INTERVAL_SECONDS = 1
       VOLUME_STEP = 5

@@ -3,7 +3,7 @@
 module Bar
   module UI
     class CpuWidget < Gtk::Box
-      include WidgetTimers
+      include GtkKit::Timers
 
       UPDATE_INTERVAL_SECONDS = 2
 

@@ -3,7 +3,7 @@
 module Bar
   module UI
     class TrayWidget < Gtk::Box
-      include WidgetTimers
+      include GtkKit::Timers
 
       ICON_SIZE = 18
 

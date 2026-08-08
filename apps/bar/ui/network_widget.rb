@@ -3,7 +3,7 @@
 module Bar
   module UI
     class NetworkWidget < Gtk::EventBox
-      include WidgetTimers
+      include GtkKit::Timers
 
       UPDATE_INTERVAL_SECONDS = 5
 

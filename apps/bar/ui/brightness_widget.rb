@@ -5,7 +5,7 @@ require 'json'
 module Bar
   module UI
     class BrightnessWidget < Gtk::Box
-      include WidgetTimers
+      include GtkKit::Timers
 
       SCRIPT_PATH = File.expand_path('~/dev/custom/scripts/waybar-brightness')
       UPDATE_INTERVAL_SECONDS = 2
