@@ -59,6 +59,15 @@ module Portland
         []
       end
 
+      # Slot-aware: "cat/name" asks whether any version is installed;
+      # "cat/name:slot" asks about that slot specifically.
+      def installed?(atom)
+        base, _, slot = atom.rpartition(':')
+        return installed_slots(atom).any? if base.empty?
+
+        installed_slots(base).include?(slot)
+      end
+
       # The deliberately-installed set: exactly the atoms recorded in the
       # world file, never dependencies.
       def world_specs

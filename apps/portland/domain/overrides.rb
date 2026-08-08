@@ -16,6 +16,7 @@ module Portland
         @use = parse_tokens(use_content)
         @keywords = parse_tokens(keywords_content)
         @stable_unmasks = parse_unmasks(stable_unmask_content)
+        @staged_use = {}
         @dirty = false
       end
 
@@ -24,7 +25,15 @@ module Portland
         tokens = (@use[atom] ||= {})
         value.nil? ? tokens.delete(flag) : tokens[flag] = value
         @use.delete(atom) if tokens.empty?
+        @staged_use[atom] = true
         @dirty = true
+      end
+
+      # Atoms whose USE flags were edited since load (or last save): the
+      # packages whose installed copies may now need recompiling. Dropping
+      # an override stages too — that also changes effective flags.
+      def staged_use_atoms
+        @staged_use.keys
       end
 
       def use_for(atom)
@@ -57,6 +66,7 @@ module Portland
       end
 
       def saved!
+        @staged_use = {}
         @dirty = false
       end
 

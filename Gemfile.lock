@@ -11,6 +11,7 @@ GEM
     cairo-gobject (4.3.4)
       cairo (>= 1.16.2)
       glib2 (= 4.3.4)
+    drb (2.2.3)
     fiddle (1.1.8)
     gdk3 (4.3.4)
       cairo-gobject (= 4.3.4)
@@ -33,11 +34,15 @@ GEM
       gdk3 (= 4.3.4)
     json (2.18.0)
     matrix (0.4.3)
+    minitest (6.0.6)
+      drb (~> 2.0)
+      prism (~> 1.5)
     native-package-installer (1.1.9)
     pango (4.3.4)
       cairo-gobject (= 4.3.4)
       gobject-introspection (= 4.3.4)
     pkg-config (1.6.5)
+    prism (1.9.0)
     rake (13.3.1)
     red-colors (0.4.0)
       json
@@ -51,6 +56,7 @@ PLATFORMS
 DEPENDENCIES
   gobject-introspection
   gtk3
+  minitest
   zeitwerk
 
 BUNDLED WITH

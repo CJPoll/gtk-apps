@@ -71,12 +71,20 @@ module Portland
       # package only if nothing else depends on it, which is the safe
       # default for interactive uninstalls. -A routes the password prompt
       # through the GUI askpass helper (Terminal sets SUDO_ASKPASS).
-      def shell_commands
+      #
+      # rebuild_atoms: installed packages whose USE flags just changed
+      # (RebuildPolicy). --oneshot keeps them out of world; --changed-use
+      # --update makes the command a no-op for any package something earlier
+      # in the pipeline already rebuilt with the new flags.
+      def shell_commands(rebuild_atoms: [])
         commands = []
         commands << 'sudo -A emerge --ask --verbose --update --deep --newuse @world' if @world_update
         commands << "sudo -A emerge --ask --verbose #{escaped(installs)}" if installs.any?
         commands << "sudo -A emerge --ask --verbose --update #{escaped(upgrades)}" if upgrades.any?
         commands << "sudo -A emerge --ask --depclean #{escaped(removals)}" if removals.any?
+        if rebuild_atoms.any?
+          commands << "sudo -A emerge --ask --verbose --oneshot --changed-use --update #{escaped(rebuild_atoms)}"
+        end
         commands
       end
 
