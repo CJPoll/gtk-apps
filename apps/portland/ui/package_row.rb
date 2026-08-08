@@ -2,38 +2,59 @@
 
 module Portland
   module UI
-    # One search result: atom, description, installed badge, and a toggle
-    # marking the package for install (not installed) or removal (installed).
+    # One search result. The header shows atom, description, installed badge,
+    # and a toggle marking the bare atom (portage picks the default slot).
+    # Expanding the row lists the package's slots, each markable individually
+    # as "category/name:slot".
     class PackageRow < Gtk::ListBoxRow
       attr_reader :package
 
-      def initialize(package, marked:, on_toggle:)
+      def initialize(package, slot_fetcher:, marked_lookup:, on_toggle:)
         super()
         @package = package
+        @slot_fetcher = slot_fetcher
+        @marked_lookup = marked_lookup
         @on_toggle = on_toggle
         @updating = false
+        @toggles = {}
+        @slots_requested = false
 
-        build(marked)
+        build
       end
 
-      # Untoggles without notifying, for when the plan is cleared wholesale.
+      # Untoggles everything without notifying, for when the plan is cleared.
       def reset!
         @updating = true
-        @toggle.active = false
+        @toggles.each_value { |toggle| toggle.active = false }
         @updating = false
       end
 
       private
 
-      def build(marked)
+      def build
+        @expander = Gtk::Expander.new
+        @expander.label_fill = true
+        @expander.label_widget = build_header
+        @expander.signal_connect('notify::expanded') do
+          load_slots if @expander.expanded?
+        end
+
+        @slot_box = Gtk::Box.new(:vertical, 4)
+        @slot_box.style_context.add_class('slot-list')
+        @expander.add(@slot_box)
+
+        add(@expander)
+      end
+
+      def build_header
         box = Gtk::Box.new(:horizontal, 12)
         box.style_context.add_class('package-row')
 
         box.pack_start(build_text, expand: true, fill: true, padding: 0)
         box.pack_start(build_badge, expand: false, fill: false, padding: 0) if @package.installed
-        box.pack_end(build_toggle(marked), expand: false, fill: false, padding: 0)
-
-        add(box)
+        box.pack_end(build_toggle(atom: @package.atom, installed: @package.installed),
+                     expand: false, fill: false, padding: 0)
+        box
       end
 
       def build_text
@@ -60,23 +81,61 @@ module Portland
         badge
       end
 
-      def build_toggle(marked)
-        @toggle = Gtk::ToggleButton.new(label: @package.installed ? 'Remove' : 'Install')
-        @toggle.valign = :center
-        @toggle.active = marked
-        @toggle.style_context.add_class(@package.installed ? 'mark-remove' : 'mark-install')
-        @toggle.signal_connect('toggled') { notify_toggle }
-        @toggle
+      def build_toggle(atom:, installed:)
+        toggle = Gtk::ToggleButton.new(label: installed ? 'Remove' : 'Install')
+        toggle.valign = :center
+        toggle.active = !@marked_lookup.call(atom).nil?
+        toggle.style_context.add_class(installed ? 'mark-remove' : 'mark-install')
+        toggle.signal_connect('toggled') { notify_toggle(atom, installed) }
+        @toggles[atom] = toggle
+        toggle
       end
 
-      def action
-        @package.installed ? :remove : :install
-      end
-
-      def notify_toggle
+      def notify_toggle(atom, installed)
         return if @updating
 
-        @on_toggle.call(@package, action)
+        @on_toggle.call(atom, installed ? :remove : :install)
+      end
+
+      def load_slots
+        return if @slots_requested
+
+        @slots_requested = true
+        loading = Gtk::Label.new('Loading slots…')
+        loading.style_context.add_class('slot-note')
+        @slot_box.add(loading)
+        @slot_box.show_all
+
+        @slot_fetcher.fetch(@package.atom) do |options|
+          loading.destroy
+          render_slots(options)
+        end
+      end
+
+      def render_slots(options)
+        if options.empty?
+          note = Gtk::Label.new('No slot metadata available for this package')
+          note.style_context.add_class('slot-note')
+          @slot_box.add(note)
+        else
+          options.each { |option| @slot_box.add(build_slot_row(option)) }
+        end
+
+        @slot_box.show_all
+      end
+
+      def build_slot_row(option)
+        row = Gtk::Box.new(:horizontal, 12)
+        row.style_context.add_class('slot-row')
+
+        label = Gtk::Label.new("slot #{option.slot} — #{option.newest_version}")
+        label.halign = :start
+        row.pack_start(label, expand: true, fill: true, padding: 0)
+
+        row.pack_start(build_badge, expand: false, fill: false, padding: 0) if option.installed
+        row.pack_end(build_toggle(atom: "#{@package.atom}:#{option.slot}", installed: option.installed),
+                     expand: false, fill: false, padding: 0)
+        row
       end
     end
   end

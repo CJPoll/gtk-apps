@@ -10,6 +10,7 @@ module Portland
 
       @plan = Domain::EmergePlan.new
       @search_runner = Managers::SearchRunner.new(on_results: method(:render_results))
+      @slot_fetcher = Managers::SlotFetcher.new
 
       setup_ui
       show_all
@@ -78,7 +79,8 @@ module Portland
       packages.each do |package|
         row = UI::PackageRow.new(
           package,
-          marked: !@plan.action_for(package.atom).nil?,
+          slot_fetcher: @slot_fetcher,
+          marked_lookup: ->(atom) { @plan.action_for(atom) },
           on_toggle: method(:toggle_mark)
         )
         @results_list.add(row)
@@ -87,8 +89,8 @@ module Portland
       @results_list.show_all
     end
 
-    def toggle_mark(package, action)
-      @plan.toggle(package.atom, action)
+    def toggle_mark(atom, action)
+      @plan.toggle(atom, action)
       @plan_bar.update(@plan)
     end
 

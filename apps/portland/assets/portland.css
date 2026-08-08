@@ -35,6 +35,20 @@
   color: #ffffff;
 }
 
+.slot-list {
+  padding: 4px 10px 8px 26px;
+}
+
+.slot-row {
+  padding: 2px 0;
+}
+
+.slot-note {
+  opacity: 0.5;
+  font-size: 12px;
+  padding: 4px 0;
+}
+
 .plan-bar {
   padding: 8px 4px 0 4px;
   border-top: 1px solid rgba(255, 255, 255, 0.1);
