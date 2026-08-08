@@ -14,6 +14,13 @@ module Portland
         @checks = []
 
         build(result)
+
+        # With unresolved errors on display, "Continue" is a gamble the user
+        # should take knowingly.
+        if result.error
+          ok = get_widget_for_response(Gtk::ResponseType::OK)
+          ok.label = 'Accept & Try Anyway'
+        end
       end
 
       # Runs modally. Returns {changes:, unmask_flags:} with the accepted

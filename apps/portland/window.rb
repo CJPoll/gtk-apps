@@ -189,7 +189,8 @@ module Portland
       end
 
       @plan_bar.busy(@plan.world_update? ? 'Resolving world update…' : 'Resolving dependencies…')
-      @resolver.resolve(resolvable, @overrides, world_update: @plan.world_update?) do |result|
+      @resolver.resolve(resolvable, @overrides, world_update: @plan.world_update?,
+                        on_progress: ->(message) { @plan_bar.busy(message) }) do |result|
         update_plan_bar
         handle_resolution(result)
       end

@@ -25,9 +25,18 @@ module Portland
         end
       end
 
-      def resolve(atoms, overrides, world_update: false, &on_result)
+      def resolve(atoms, overrides, world_update: false, on_progress: nil, &on_result)
         Thread.new do
-          result = resolve_sync(atoms, overrides, world_update)
+          result = begin
+            resolve_sync(atoms, overrides, world_update, on_progress)
+          rescue StandardError => e
+            warn "portland resolver crashed: #{e.class}: #{e.message}"
+            warn e.backtrace.take(8).join("\n")
+            Result.new(changes: [], unmask_flags: [], extra_atoms: [],
+                       error: "portland's resolver crashed: #{e.class}: #{e.message}\n" \
+                              '(details in logs/portland.log)',
+                       clean: false)
+          end
 
           GLib::Idle.add do
             on_result.call(result)
@@ -38,7 +47,20 @@ module Portland
 
       private
 
-      def resolve_sync(atoms, overrides, world_update)
+      # Progress lines go to the log (timestamped) and, on the main loop,
+      # to the UI callback — a multi-minute world resolution should never
+      # look like a hang.
+      def report(on_progress, message)
+        warn "[#{Time.now.strftime('%H:%M:%S')}] resolver: #{message}"
+        return unless on_progress
+
+        GLib::Idle.add do
+          on_progress.call(message)
+          false
+        end
+      end
+
+      def resolve_sync(atoms, overrides, world_update, on_progress)
         atoms = atoms.dup
         work = clone_overrides(overrides)
         changes = []
@@ -47,13 +69,17 @@ module Portland
         error = nil
         clean = false
 
-        MAX_ROUNDS.times do
+        scope = world_update ? 'world update' : "#{atoms.size} package#{atoms.size == 1 ? '' : 's'}"
+
+        MAX_ROUNDS.times do |round|
+          report(on_progress, "Resolving #{scope} — round #{round + 1}/#{MAX_ROUNDS}: running emerge…")
           output = pretend(atoms, work, world_update)
 
           round_changes = Domain::AutounmaskParser.parse(output)
           if round_changes.any?
             round_changes.each { |change| stage(work, change) }
             changes.concat(round_changes)
+            report(on_progress, "Round #{round + 1}: #{round_changes.size} config changes suggested; re-resolving…")
             next
           end
 
@@ -63,6 +89,7 @@ module Portland
           if liftable.any?
             liftable.each { |flag| work.set_stable_unmask(flag) }
             unmask_flags.concat(liftable)
+            report(on_progress, "Round #{round + 1}: lifting stable mask on #{liftable.join(', ')}; re-resolving…")
             next
           end
 
@@ -73,11 +100,13 @@ module Portland
           if blockers.any?
             extra_atoms.concat(blockers)
             atoms.concat(blockers)
+            report(on_progress, "Round #{round + 1}: including #{blockers.join(', ')} to clear blockers; re-resolving…")
             next
           end
 
           error = Domain::AutounmaskParser.resolution_error(output)
           clean = error.nil?
+          report(on_progress, clean ? 'Resolution clean.' : 'Resolution stopped with errors.')
           break
         end
 

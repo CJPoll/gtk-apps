@@ -59,7 +59,13 @@ module Portland
         generation = (@generation += 1)
 
         Thread.new do
-          packages = block.call
+          packages = begin
+            block.call
+          rescue StandardError => e
+            warn "portland listing crashed: #{e.class}: #{e.message}"
+            warn e.backtrace.take(8).join("\n")
+            []
+          end
 
           GLib::Idle.add do
             @on_results.call(packages) if generation == @generation
