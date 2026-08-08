@@ -245,8 +245,12 @@ module Portland
     # emerges follow in a terminal only once that succeeds, so a cancelled
     # password never leaves emerge running against stale config.
     def install_config_then_emerge
+      # Snapshot before the install callback runs saved!, which clears the
+      # staged-atom record the rebuild list is derived from.
+      rebuilds = rebuild_atoms
+
       unless @overrides.dirty?
-        run_emerges
+        run_emerges(rebuilds)
         return
       end
 
@@ -257,15 +261,25 @@ module Portland
           @overrides.saved!
           @detail_fetcher.invalidate!
           update_plan_bar
-          run_emerges
+          run_emerges(rebuilds)
         else
           warn 'portland: config install failed or was cancelled; emerge not started'
         end
       end
     end
 
-    def run_emerges
-      commands = @plan.shell_commands
+    # Installed packages whose USE flags were just edited get recompiled in
+    # the same Apply, so config changes take effect without a manual emerge.
+    def rebuild_atoms
+      Domain::RebuildPolicy.atoms(
+        @overrides.staged_use_atoms,
+        plan: @plan,
+        installed: ->(atom) { Adapters::PortageCli.installed?(atom) }
+      )
+    end
+
+    def run_emerges(rebuild_atoms = [])
+      commands = @plan.shell_commands(rebuild_atoms: rebuild_atoms)
       return if commands.empty?
 
       Adapters::Terminal.run(commands.join(' && ')) { refresh_current_view }
