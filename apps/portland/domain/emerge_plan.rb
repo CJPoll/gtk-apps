@@ -52,11 +52,12 @@ module Portland
 
       # --ask keeps the final say in the terminal; --depclean removes a
       # package only if nothing else depends on it, which is the safe
-      # default for interactive uninstalls.
+      # default for interactive uninstalls. -A routes the password prompt
+      # through the GUI askpass helper (Terminal sets SUDO_ASKPASS).
       def shell_commands
         commands = []
-        commands << "sudo emerge --ask --verbose #{escaped(installs)}" if installs.any?
-        commands << "sudo emerge --ask --depclean #{escaped(removals)}" if removals.any?
+        commands << "sudo -A emerge --ask --verbose #{escaped(installs)}" if installs.any?
+        commands << "sudo -A emerge --ask --depclean #{escaped(removals)}" if removals.any?
         commands
       end
 

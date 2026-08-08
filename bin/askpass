@@ -1,0 +1,8 @@
+#! /usr/bin/env bash
+
+export PATH="${ASDF_DATA_DIR:-/home/cjpoll/.asdf}/shims:/home/cjpoll/bin/:$PATH"
+
+ROOT="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
+cd "$ROOT"
+
+exec bundle exec ruby apps/askpass/main.rb "${@}"

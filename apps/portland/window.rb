@@ -43,7 +43,7 @@ module Portland
 
       sync_button = Gtk::Button.new(label: '⟳ Sync')
       sync_button.tooltip_text = 'Run sudo emerge --sync in a terminal'
-      sync_button.signal_connect('clicked') { Adapters::Terminal.run('sudo emerge --sync') }
+      sync_button.signal_connect('clicked') { Adapters::Terminal.run('sudo -A emerge --sync') }
 
       bar.pack_start(@search_entry, expand: true, fill: true, padding: 0)
       bar.pack_end(sync_button, expand: false, fill: false, padding: 0)
