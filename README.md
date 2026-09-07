@@ -20,8 +20,8 @@ named in each row.
 
 | Dependency | Gentoo package | Notes |
 |-----------------------|--------------------------------|---------------------------------------------------|
-| Ruby 3.4.x | via asdf (`~/.tool-versions`) | `bin/*` wrappers resolve the asdf shim path |
-| Bundler + gems | — | `bundle install`; gems listed in `Gemfile` |
+| Ruby 3.4.x | `dev-lang/ruby:3.4` | Selected via `eselect ruby set 3`; `bin/*` exec `/usr/bin/ruby` — no version manager |
+| Bundler + gems | `dev-ruby/bundler` | Gems install into `~/.gem/ruby/3.4.0`; see Setup |
 | GTK 4 | `gui-libs/gtk:4` | Tested against 4.20; headers needed at gem build |
 | GObject Introspection | `dev-libs/gobject-introspection` | Ruby reaches all C libraries through GI typelibs |
 | Hyprland | `gui-wm/hyprland` | `hyprctl` + the IPC event socket |
@@ -104,9 +104,26 @@ Missing fonts render as placeholder boxes but break nothing.
 
 ```sh
 cd ~/dev/widgets
-bundle install
-./bin/bar        # or launcher / portland / hypr-manager
+sudo eselect ruby set 3          # once: points /usr/bin/ruby at 3.4
+GEM_HOME=~/.gem/ruby/3.4.0 bundle install
+./bin/bar                        # or launcher / portland / hypr-manager
 ```
+
+`~/.gem/ruby/3.4.0` is already in ruby 3.4's `Gem.default_path`, so nothing
+needs `GEM_HOME` at runtime — only at install time.
+
+`bin/*` exec `/usr/bin/ruby` by absolute path: it follows `eselect`, so a
+future 3.5 needs no edit here, and being absolute it ignores a `PATH` that a
+version manager has put its own shims on.
+
+Two traps worth knowing:
+
+- **Don't set a local `bundle path`** (e.g. `vendor/bundle`). That makes
+  Bundler disable shared gems, and `bundler/setup` then scrubs `$LOAD_PATH` —
+  which silently drops `-Itest` and breaks the test command below.
+- If a build fails with `linked to incompatible .../libruby.so`, a version
+  manager leaked `RUBYLIB`/`GEM_HOME` into it. Clear those and reinstall; the
+  `bin/*` wrappers already scrub them at launch.
 
 `bin/bar` and `bin/launcher` are the Hyprland `exec-once` entry points; they
 log to `logs/<app>.log`, truncated per launch.
@@ -114,7 +131,7 @@ log to `logs/<app>.log`, truncated per launch.
 ## Tests
 
 ```sh
-find test -name '*_test.rb' -exec bundle exec ruby -Itest {} \;
+find test -name '*_test.rb' -exec /usr/bin/ruby -r bundler/setup -Itest {} \;
 ```
 
 Pure-domain and adapter contract tests; no GTK or display required, though

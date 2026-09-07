@@ -44,9 +44,12 @@ pkill -SIGUSR2 -f 'apps/bar/main.rb'       # reload bar CSS
 pkill -SIGUSR1 -f 'apps/launcher/main.rb'  # toggle dock visibility
 ```
 
-`bin/*` scripts resolve the repo root from their own location, set up the asdf
-PATH, and log to `logs/<app>.log` (truncated per launch, because Hyprland
-discards exec-once stderr).
+`bin/*` scripts resolve the repo root from their own location, exec the system
+ruby (`/usr/bin/ruby`, the `eselect`-managed symlink) with `-r bundler/setup`,
+and log to `logs/<app>.log`
+(truncated per launch, because Hyprland discards exec-once stderr). They scrub
+`RUBYLIB`/`GEM_*`/`BUNDLE_*` first so a version-manager environment inherited
+from the launching shell can't redirect them at another ruby's gems.
 
 ## Repository Layout
 

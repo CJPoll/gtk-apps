@@ -1,8 +1,14 @@
 #! /usr/bin/env bash
 
-export PATH="${ASDF_DATA_DIR:-/home/cjpoll/.asdf}/shims:/home/cjpoll/bin/:$PATH"
+export PATH="/home/cjpoll/bin/:$PATH"
+
+# A parent shell that ran through asdf can export RUBYLIB/GEM_* pointing at a
+# different interpreter. Those leak in and make the system ruby load another
+# ruby's gems (native extensions then fail with "linked to incompatible
+# libruby"). Gems here resolve only through bundler/setup and the user gem dir.
+unset RUBYLIB RUBYOPT GEM_HOME GEM_PATH BUNDLE_GEMFILE BUNDLE_BIN_PATH BUNDLER_VERSION
 
 ROOT="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
 cd "$ROOT"
 
-exec bundle exec ruby apps/askpass/main.rb "${@}"
+exec /usr/bin/ruby -r bundler/setup apps/askpass/main.rb "${@}"
