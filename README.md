@@ -69,7 +69,11 @@ hide themselves when a script is absent:
 
 - `waybar-memory-procs` (memory widget)
 - `waybar-battery` (battery widget)
-- `waybar-brightness` (brightness widget)
+
+The brightness widget needs no tool: it reads and writes
+`/sys/class/backlight/*` directly, and hides itself when no backlight exists
+(desktops). Writing requires membership in the `video` group, which owns the
+`brightness` file — without it the slider moves but the panel does not.
 
 ### portland
 

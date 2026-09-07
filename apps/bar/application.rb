@@ -42,9 +42,34 @@ module Bar
       end
     end
 
+    # Hiding a bar tears its window down instead of just unmapping it.
+    #
+    # Unmapping (`window.visible = false`) keeps the wl_surface and destroys
+    # only the layer surface, so re-showing calls get_layer_surface on that
+    # same wl_surface. zwlr_layer_shell requires a buffer-free commit and a
+    # configure round-trip before anything is attached, but the widget timers
+    # keep painting right up to the moment we hide: a frame committed by the
+    # rendering thread lands on the surface after GTK's null-attach, and the
+    # next commit trips "layerSurface was not configured, but a buffer was
+    # attached" — a fatal protocol error that kills the whole process.
+    # Destroying the window retires the wl_surface with it, so showing again
+    # always starts from a fresh, bufferless surface and cannot race.
+    #
+    # Tearing down also destroys the widgets, which retires their timers: a
+    # hidden bar costs nothing rather than polling on into the background.
     def toggle_visibility
       @bars_visible = !@bars_visible
-      @windows.each { |window| window.visible = @bars_visible }
+      @bars_visible ? show_bars : hide_bars
+    end
+
+    def show_bars
+      Compositor::Adapters::HyprlandIpc.monitors.each { |monitor| add_bar(monitor['name']) }
+    end
+
+    def hide_bars
+      # Destroying a bar prunes it from @windows, so iterate over a copy.
+      @windows.dup.each { |window| window.destroy unless window.destroyed? }
+      @windows.clear
     end
 
     def stylesheet_paths
@@ -116,6 +141,9 @@ module Bar
     end
 
     def add_bar(monitor_name)
+      # A monitor plugged in while the bars are hidden must stay bare; it gets
+      # its bar from show_bars along with everyone else.
+      return unless @bars_visible
       return if bar_for(monitor_name)
 
       window = create_bar_window(monitor_name)
@@ -163,9 +191,7 @@ module Bar
     def on_shutdown
       @events&.stop
       @sni_host&.stop
-      # Destroying a bar prunes it from @windows, so iterate over a copy.
-      @windows.dup.each { |window| window.destroy unless window.destroyed? }
-      @windows.clear
+      hide_bars
     end
 
     def create_bar_window(monitor_name)

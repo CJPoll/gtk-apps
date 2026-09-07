@@ -30,3 +30,49 @@
     font-family: "Inconsolata Nerd Font Mono", "Inconsolata", monospace;
     font-size: 14px;
 }
+
+/* BrightnessPopover slider */
+.brightness-slider {
+    padding: 10px 14px;
+}
+
+.brightness-slider label {
+    font-family: "Inconsolata Nerd Font Mono", "Inconsolata", monospace;
+    font-size: 14px;
+    color: #e0e0ff;
+    text-shadow: 0 0 8px rgba(224, 224, 255, 0.3);
+}
+
+.brightness-readout {
+    color: #00f3ff;
+    text-shadow: 0 0 8px rgba(0, 243, 255, 0.5);
+}
+
+.brightness-slider trough {
+    background-color: rgba(0, 102, 255, 0.2);
+    border: 1px solid rgba(0, 243, 255, 0.3);
+    border-radius: 4px;
+    min-height: 6px;
+}
+
+.brightness-slider highlight {
+    background-color: #00f3ff;
+    border-radius: 4px;
+    box-shadow: 0 0 10px rgba(0, 243, 255, 0.6);
+}
+
+.brightness-slider slider {
+    background-color: #e0e0ff;
+    border: 1px solid #00f3ff;
+    border-radius: 50%;
+    min-width: 14px;
+    min-height: 14px;
+    margin: -5px;
+    box-shadow: 0 0 8px rgba(0, 243, 255, 0.5);
+}
+
+.brightness-slider slider:hover {
+    background-color: #ff6b35;
+    border-color: #ff6b35;
+    box-shadow: 0 0 12px rgba(255, 107, 53, 0.7);
+}

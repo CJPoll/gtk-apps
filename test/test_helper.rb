@@ -7,9 +7,11 @@ require 'zeitwerk'
 # references, so GTK-dependent UI classes are never loaded here.
 module Portland; end
 module HyprManager; end
+module Bar; end
 
 loader = Zeitwerk::Loader.new
 loader.inflector.inflect('ui' => 'UI')
 loader.push_dir(File.expand_path('../apps/portland', __dir__), namespace: Portland)
 loader.push_dir(File.expand_path('../apps/hypr-manager', __dir__), namespace: HyprManager)
+loader.push_dir(File.expand_path('../apps/bar', __dir__), namespace: Bar)
 loader.setup
