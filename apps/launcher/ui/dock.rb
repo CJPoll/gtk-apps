@@ -13,6 +13,7 @@ module Launcher
         steam
         pyrope
         beryl
+        net.ankiweb.Anki
       ].freeze
 
       # Magnification effect radius in pixels
