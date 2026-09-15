@@ -1,3 +1,8 @@
 logs/
 dist/
 PLAN.md
+
+# Project-local gem install (bundle config path vendor/bundle) — apps run on
+# system Ruby, gems vendored here so no root-owned system gem dir is touched
+/.bundle/
+/vendor/bundle/

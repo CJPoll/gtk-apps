@@ -5,7 +5,8 @@ export PATH="/home/cjpoll/bin/:$PATH"
 # A parent shell that ran through asdf can export RUBYLIB/GEM_* pointing at a
 # different interpreter. Those leak in and make the system ruby load another
 # ruby's gems (native extensions then fail with "linked to incompatible
-# libruby"). Gems here resolve only through bundler/setup and the user gem dir.
+# libruby"). Gems here resolve only through bundler/setup and the project-local
+# vendor/bundle (bundle config path vendor/bundle).
 unset RUBYLIB RUBYOPT GEM_HOME GEM_PATH BUNDLE_GEMFILE BUNDLE_BIN_PATH BUNDLER_VERSION
 
 # gtk4-layer-shell must interpose libwayland-client symbols before GTK
@@ -16,7 +17,7 @@ export LD_PRELOAD=/usr/lib64/libgtk4-layer-shell.so
 # GTK 4.20 defaults to the Vulkan renderer, whose in-flight swapchain present
 # races window teardown (see bin/bar); the dock destroys its window on toggle
 # too, so pin the GL renderer here as well.
-export GSK_RENDERER=ngl
+export GSK_RENDERER=gl
 
 ROOT="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
 cd "$ROOT"

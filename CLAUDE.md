@@ -49,7 +49,10 @@ ruby (`/usr/bin/ruby`, the `eselect`-managed symlink) with `-r bundler/setup`,
 and log to `logs/<app>.log`
 (truncated per launch, because Hyprland discards exec-once stderr). They scrub
 `RUBYLIB`/`GEM_*`/`BUNDLE_*` first so a version-manager environment inherited
-from the launching shell can't redirect them at another ruby's gems.
+from the launching shell can't redirect them at another ruby's gems. Gems are
+installed project-locally in `vendor/bundle` (`bundle config path vendor/bundle`,
+gitignored) so the root-owned system gem dir is never written to; run
+`bundle install` with the system `bundle`.
 
 ## Repository Layout
 
