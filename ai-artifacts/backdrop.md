@@ -105,9 +105,13 @@ wallpaper {
   (F9).
 - A displaced orphan (§4.2 `Staging`) renders as one inert comment line,
   `# orphan desc=<description> connector=<connector> fit=<mode> path=<path>`,
-  with `path` last because paths may contain spaces. `parse` reads it back
-  into `Staging`, so the panel's choice survives until it is reconnected
-  and applied.
+  with `path` last because paths may contain spaces. The exact grammar is
+  `\A# orphan desc=(.*?) connector=(\S+) fit=(\S+) path=(.+)\z`, so a
+  multi-word description is fine. An empty `desc=` maps to a
+  `connector:<connector>` key. `parse` returns records as ordinary
+  `Assignment`s, and the next `resolve` re-detects them as displaced, or
+  re-activates them when the collision is gone. The panel's choice
+  survives until it is reconnected and applied.
 
 ## 4. Modules, bucket by bucket
 
@@ -138,9 +142,9 @@ components never call managers or adapters.
 | `SourceCheck` | `sourced?(hyprpaper_conf, managed_path)` checks for an active `source =` line naming the managed file (`~` or absolute form). A missing line makes Apply's persistence a mechanism that writes but nothing reads, so the UI warns. |
 | `ActiveWallpapers` | `parse(listactive_output)` returns `{connector => path}`, splitting each line on the **first** `": "`. It raises `Malformed` on output starting with `error:`, on any non-blank line without `": "`, or on a line with an empty connector or path. Plain text such as `instance invalid` therefore raises instead of reading as "nothing active". Empty output is `{}`, the one legitimate "nothing active". |
 | `LibrarySettings` | Ordered folder list. `add(path)` expands, requires absolute, and dedupes. `remove(path)`. `to_h` / `from_h` with `version: 1`. `from_h` on an unknown version raises instead of guessing. |
-| `Staging` | The **full desired file contents**, not a diff. `Staging.from_saved(assignments)` seeds it with every saved assignment, orphans included. That set is also the `revert` baseline. Entries are keyed by `MonitorKey`: the description when the block recorded one, otherwise `connector:<name>`, so two description-less blocks never collide. Methods: `stage(descriptions, path)`, `stage_all(monitors, path)`, `remap(description, new_connector)` (used for `moved_from`), `revert`, `dirty?` (desired ≠ baseline), `staged_for(key)`, and `touched` (keys the user staged this session). `resolve(monitors)` returns the connector-keyed `Assignment`s to render: each connected entry gets the connector it is currently on, and orphans pass through with their recorded connector. **A connected entry wins any connector collision.** An orphan whose recorded connector is now used by a connected entry is *displaced*: it is kept as an `OrphanRecord`, which renders as an inert comment line and targets no monitor. A non-colliding orphan keeps its active block, so replugging the same panel into the same port restores its wallpaper with no app running. `resolve` returns `Resolved(assignments:, displaced:)`. It raises `UnresolvedMonitor` only when a key in `touched` is not connected, and the error names **every** such key. An orphan the user never touched is never an error, and is never dropped. |
+| `Staging` | The **full desired file contents**, not a diff. `Staging.from_saved(assignments)` seeds it with every saved assignment, orphans included. That set is also the `revert` baseline. Entries are keyed by `MonitorKey`: the description when the block recorded one, otherwise `connector:<name>`, so two description-less blocks never collide. Methods: `stage(descriptions, path)`, `stage_all(monitors, path)`, `remap(description, new_connector)` (used for `moved_from`), `revert`, `dirty?` (desired ≠ baseline), `staged_for(key)`, and `touched` (keys the user staged this session). `resolve(monitors)` returns the connector-keyed `Assignment`s to render: each connected entry gets the connector it is currently on, and orphans pass through with their recorded connector. **Re-keying first:** a `connector:X` entry whose connector is connected takes that monitor's live description and is re-keyed to it. If a description-keyed entry already exists for that monitor, the description-keyed one wins, and the `connector:` entry is dropped with a warning in `Resolved#warnings`. **Then a connected entry wins any remaining connector collision**, so every connector has at most one active block. An orphan whose recorded connector is now used by a connected entry is *displaced*: it is kept as an `OrphanRecord`, which renders as an inert comment line and targets no monitor. A non-colliding orphan keeps its active block, so replugging the same panel into the same port restores its wallpaper with no app running. `resolve` returns a frozen `Resolved(assignments:, displaced:, warnings:)`. It raises `UnresolvedMonitor` only when a key in `touched` is not connected, and the error names **every** such key. An orphan the user never touched is never an error, and is never dropped. |
 | `Reconciliation` | `call(assignments, monitors, live)` returns one `MonitorState` per connected monitor, plus `orphans`. States: `saved`, `live` (`nil` when hyprpaper is unreachable, which means *unknown*, not *differs*), `drift?` (live known and different from saved), and `moved_from` (the recorded description now sits on another connector). Orphans are saved assignments whose description is not connected. They are kept in the file, and the status line counts and names them. |
-| `ApplyResult` | `Struct(:connector, :status, :reason, :expected, :actual, :text)`. `status` is `:applied`, `:ipc_failed`, `:unverified` (live read and it differs), or `:unconfirmed` (live could not be read during verification, so the outcome is unknown, never assumed applied). `reason` (for `:ipc_failed` and `:unconfirmed`) is `:daemon_down`, `:bad_path`, `:invalid_monitor`, `:error` or `:other`, and `text` holds the raw hyprctl output. `ApplyResult.classify(outcome, expected:, actual:)` builds one. `ApplyReport` = `Struct(:saved, :results, :warnings)`. Its `summary` produces the status text and always says whether the file was saved. |
+| `ApplyResult` | `Struct(:connector, :status, :reason, :expected, :actual, :text)`. `status` is `:applied`, `:ipc_failed`, `:unverified` (live read and it differs), or `:unconfirmed` (live could not be read during verification, so the outcome is unknown, never assumed applied). `reason` (for `:ipc_failed` and `:unconfirmed`) is `:daemon_down`, `:bad_path`, `:invalid_monitor`, `:error` or `:other`, and `text` holds the raw hyprctl output. `ApplyResult.classify(outcome, expected:, actual:)` builds one. `ApplyReport` = `Struct(:saved, :written, :results, :warnings)`. `written` is the full assignment list rendered to the file, orphan records included. Its `summary` produces the status text and always says whether the file was saved. |
 
 ### 4.3 Side effects
 
@@ -156,7 +160,7 @@ components never call managers or adapters.
 
 | Module | Responsibility |
 |--------|----------------|
-| `Backdrop::Managers::WallpaperStore` | `load` runs the startup flow (§6.2) and returns a `Snapshot(monitors:, assignments:, live:, states:, orphans:, issues:, sourced:)`. `refresh(snapshot)` re-reads monitors and live state and reconciles (§6.3), returning a new `Snapshot`. `apply(staging, monitors)` runs the apply flow (§6.1). It raises only **before the write**: `Staging::UnresolvedMonitor`, `PaperConf::InvalidAssignment` (path or fit), `ManagedConfFile::WriteError`. Once the write succeeds it **always returns** an `ApplyReport(saved: true, …)`. Every IPC, instance-resolution or verification error after that point becomes a per-monitor `:ipc_failed` or `:unconfirmed` result, never an exception. The report also carries `resolved.displaced` and the removed issue blocks as warnings. `watch(on_change:, on_closed:)` owns the `HyprlandEvents` instance, so `Window` never touches an adapter. Adapters and a `sleeper:` (default `->(s) { sleep(s) }`, a no-op lambda in tests) are injected through the constructor. |
+| `Backdrop::Managers::WallpaperStore` | `load` runs the startup flow (§6.2) and returns a `Snapshot(monitors:, assignments:, live:, states:, orphans:, issues:, sourced:)`. `refresh(snapshot)` re-reads monitors and live state and reconciles (§6.3), returning a new `Snapshot`. `apply(resolved)` runs the apply flow (§6.1) on a `Resolved` that `Window` built. It raises only **before the write**: `PaperConf::InvalidAssignment` (path or fit), `ManagedConfFile::WriteError`. Once the write succeeds it **always returns** an `ApplyReport(saved: true, …)`. Every IPC, instance-resolution or verification error after that point becomes a per-monitor `:ipc_failed` or `:unconfirmed` result, never an exception. The report also carries `resolved.displaced` and the removed issue blocks as warnings. `watch(on_change:, on_closed:)` owns the `HyprlandEvents` instance, so `Window` never touches an adapter. Adapters and a `sleeper:` (default `->(s) { sleep(s) }`, a no-op lambda in tests) are injected through the constructor. |
 | `Backdrop::Managers::Library` | `load` reads settings and scans each folder. `add_folder` / `remove_folder` save settings and rescan. Returns `[ScanResult]`. |
 
 ### 4.5 UI (`Backdrop::UI`, presentation only)
@@ -173,7 +177,7 @@ components never call managers or adapters.
 
 - `apps/backdrop/main.rb`: Zeitwerk roots for `lib/` and `apps/backdrop/`, with the `ui => UI` inflection. It is not a layer-shell client.
 - `apps/backdrop/application.rb`: `Backdrop::Application < GtkKit::Application`, re-activation presents the existing window (copy hypr-manager).
-- `apps/backdrop/window.rb`: owns `Snapshot`, `Staging`, the selected image, and the scan results. It binds UI callbacks to `WallpaperStore` and `Library`. The action bar has **Set on all**, **Revert** and **Apply**, and Apply is sensitive only when `dirty?` and no apply is running. Apply runs `WallpaperStore#apply` on a worker thread, because verification sleeps (§6.1). The worker gets a **frozen copy** of `Staging`, since Set here stays live on the main thread. The worker body rescues `StandardError` and hands either the report or the error to the main thread through `on_main_thread`. An `ensure` clears the running flag, so a failure can never leave Apply disabled. When a report with `saved: true` arrives, `Window` rebuilds `Staging` with `from_saved` from what was written, which resets `dirty?` and `touched`. Monitor changes arrive through `WallpaperStore#watch` (§6.3). After every `load` or `refresh`, `Window` applies each `moved_from` state to `Staging` with `remap`.
+- `apps/backdrop/window.rb`: owns `Snapshot`, `Staging`, the selected image, and the scan results. It binds UI callbacks to `WallpaperStore` and `Library`. The action bar has **Set on all**, **Revert** and **Apply**, and Apply is sensitive only when `dirty?` and no apply is running. Apply runs `WallpaperStore#apply` on a worker thread, because verification sleeps (§6.1). `Window` calls `staging.resolve(monitors)` **on the main thread**, then hands the immutable `Resolved` to the worker (`WallpaperStore#apply(resolved)`). `Staging` never crosses threads. **Set here**, **Set on all** and **Revert** are insensitive while an apply runs, so no edit can race the write. The worker body rescues `StandardError` and hands either the report or the error to the main thread through `on_main_thread`. An `ensure` clears the running flag, so a failure can never leave Apply disabled. When a report with `saved: true` arrives, `Window` rebuilds `Staging` with `from_saved(report.written)`, which resets `dirty?` and `touched`. Monitor changes arrive through `WallpaperStore#watch` (§6.3). After every `load` or `refresh`, `Window` applies each `moved_from` state to `Staging` with `remap`.
 - `apps/backdrop/assets/backdrop.css`: layered over `assets/base.css`.
 - `bin/backdrop`: same wrapper as `bin/hypr-manager`, plus the `logs/<app>.log` redirect that `bin/bar` has.
 
@@ -219,12 +223,11 @@ sequenceDiagram
   participant D as Domain
   participant F as ManagedConfFile
   participant I as HyprpaperIpc
-  W->>S: apply(staging, monitors)
-  S->>D: staging.resolve(monitors) (connected + orphans)
+  W->>D: staging.resolve(monitors) on the main thread (connected + orphans)
   alt a touched key is unresolved
-    D-->>S: UnresolvedMonitor [descs]
-    S-->>W: error, nothing written, no IPC
+    D-->>W: UnresolvedMonitor [descs]: nothing written, no IPC
   end
+  W->>S: apply(resolved) on a worker thread
   S->>D: PaperConf.render(assignments) (validates path + fit)
   S->>F: write(content) (atomic)
   alt write fails
@@ -362,7 +365,7 @@ No test spawns hyprpaper (F13) or mutates `ENV`.
 - `render` raises on an invalid path or fit mode.
 - A block without a `# desc:` comment parses with `description: nil` and a note issue.
 - A `desc:`-keyed block, a catch-all block, an unknown key, and an unclosed block each yield an issue, do not raise, and produce no `Assignment`.
-- An orphan comment record round-trips through `render` and `parse`, including a path with spaces.
+- An orphan comment record round-trips through `render` and `parse`, including a multi-word description and a path with spaces. An empty `desc=` parses to a `connector:` key.
 
 `test/backdrop/domain/image_path_test.rb`
 - Accepts an absolute path with spaces.
@@ -389,6 +392,8 @@ No test spawns hyprpaper (F13) or mutates `ENV`.
 - Two saved blocks with no description are keyed `connector:HDMI-A-1` and `connector:DP-2`, and both survive `resolve`.
 - `remap` moves an entry to its new connector and sets `dirty?`.
 - An untouched orphan never raises.
+- **Collision without description:** a `connector:HDMI-A-1` entry plus panel B staged on `HDMI-A-1` resolve to exactly one `HDMI-A-1` assignment (B's), with a warning naming the dropped entry.
+- A `connector:` entry on a connected port with no competing entry is re-keyed to that monitor's description.
 - **Collision:** an orphan recorded on `HDMI-A-1` plus a connected panel now on `HDMI-A-1` resolve to exactly one active `HDMI-A-1` assignment (the connected one). The orphan appears in `displaced`.
 - **Miss test:** a *touched* key that is not connected raises `UnresolvedMonitor` naming it. With two missing, it names both.
 
@@ -432,7 +437,7 @@ Adapters, against a tmpdir (paths injected through constructors):
 - Write happens before IPC (recorded call order).
 - Staging one monitor writes a file that still contains the other saved blocks and the orphans.
 - A write failure means zero IPC calls.
-- `UnresolvedMonitor` means no write and no IPC.
+- `apply` receives an already-`Resolved` value, so `UnresolvedMonitor` never reaches it. (That is a `Staging` test, above.) A `PaperConf::InvalidAssignment` raised by `render` means no write and no IPC.
 - IPC `daemon_down` gives a result that says "saved, not live".
 - rc 0 with `list_active` unchanged gives `:unverified`.
 - `list_active` raising during verification returns a report with `saved: true` and `:unconfirmed`. It does not raise.
