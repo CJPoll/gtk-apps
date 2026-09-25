@@ -53,7 +53,7 @@ commissioned with.
 | F8 | Same-priority blocks: the **last parsed wins**. `source =` position matters. | The `source` line goes at the **end** of `hyprpaper.conf`. |
 | F9 | `source =` of a missing file exits 1, which blanks the desktop. An empty or comment-only file is fine, and `~` expands. **A wildcard glob exits 1 even when it matches** (the log says "glob matched 1 file(s)", then fails). | The glob-plus-committed-placeholder approach is out. The file's existence is guaranteed at launch (§5). |
 | F10 | A malformed sourced file, or a missing image path, is logged and is **not** fatal. | A bad write degrades one monitor. It does not blank the desktop. The writer is still atomic. |
-| F11 | `hyprctl --instance <bad> monitors -j` prints `instance invalid` with **rc 0**. Today `HyprlandIpc.monitors` would parse-fail and return `[]`, reporting "no monitors" for "wrong instance". | The strict query treats unparseable output as an error (§4.3, U2). |
+| F11 | `hyprctl --instance <bad> monitors -j` prints `instance invalid` with **rc 0**. (`hyprctl --instance <bad> hyprpaper listactive` prints the same text but exits 1.) Today `HyprlandIpc.monitors` would parse-fail and return `[]`, reporting "no monitors" for "wrong instance". | The strict query treats unparseable output as an error (§4.3, U2). |
 | F12 | `hyprctl instances -j` lists live instances with their `wl_socket`. `hyprctl --instance <sig>` targets one explicitly, and that includes `hyprctl … hyprpaper`. | Stale-signature fix: pick the instance whose `wl_socket` equals the app's own `WAYLAND_DISPLAY` (§4.3). |
 | F13 | A second foreground `hyprpaper` deletes the live `.hyprpaper.sock` on exit. | Tests never spawn hyprpaper. Live verification is manual, with a restart (§8.4). |
 
@@ -115,10 +115,10 @@ components never call managers or adapters.
 | Module | Bucket | Change |
 |--------|--------|--------|
 | `Compositor::Domain::Monitor` (`lib/compositor/domain/monitor.rb`) | Domain | **Moved** from `HyprManager::Domain::Monitor`, unchanged. hypr-manager references the new constant. (U1) |
-| `Compositor::Domain::InstanceChoice` (`lib/compositor/domain/instance_choice.rb`) | Domain | New. `pick(instances, wayland_display:)` returns a signature or raises `NoInstance` / `AmbiguousInstance`, naming the key it searched for and the candidates it saw. (U2) |
-| `Compositor::Adapters::HyprlandInstance` | Side effect | New. Runs `hyprctl instances -j`, then `InstanceChoice.pick` with `ENV['WAYLAND_DISPLAY']`. Memoized per process. (U2) |
-| `Compositor::Adapters::HyprlandIpc` | Side effect | Every call passes `--instance <sig>`. New `monitors!` raises `HyprlandIpc::Error` on a non-zero exit **or** unparseable output (F11). The lenient `monitors` keeps returning `[]` for existing callers, but now warns with the instance and command it used. Migrating bar and launcher to the strict call is a separate follow-up. (U2) |
-| `Compositor::Adapters::HyprlandEvents` | Side effect | Resolves its socket path through `HyprlandInstance` instead of the raw env var. Adds `on_closed { |reason| }`, so a dead stream is visible to the app rather than only a `warn`. (U2) |
+| `Compositor::Domain::InstanceChoice` (`lib/compositor/domain/instance_choice.rb`) | Domain | New. `pick(instances, wayland_display:)` returns a signature. It raises `InstanceError` subclasses, each naming the key it searched for and the candidates it saw: `MissingKey` when `wayland_display` is nil or empty (a resolution failure, never "no match"), `NoInstance` when nothing matches, `AmbiguousInstance` when more than one does. Both sides are compared by `File.basename`, so `wayland-1` and `/run/user/1000/wayland-1` match. (U2) |
+| `Compositor::Adapters::HyprlandInstance` | Side effect | New. Runs `hyprctl instances -j` and raises `InstanceError` on a non-zero exit or unparseable output, before `pick` ever sees a list. Then calls `InstanceChoice.pick` with `ENV['WAYLAND_DISPLAY']`. The result, or the error, is memoized per process. `resolve!` raises. `resolve` returns `nil` and warns once with the error's message, for lenient callers. The command runner is injectable for tests. (U2) |
+| `Compositor::Adapters::HyprlandIpc` | Side effect | Every call passes `--instance <sig>` when `HyprlandInstance.resolve` returns one. The command runner is injectable. New `monitors!` calls `resolve!`, and raises `HyprlandIpc::Error` on a non-zero exit, on unparseable output (F11: `instance invalid` with rc 0), or on an empty list (a running compositor always has a monitor). **The lenient methods keep today's contract exactly:** `monitors`, `workspaces` and `active_workspace` never raise. When resolution fails they fall back to the inherited environment, as today. Every failure warns with the instance and command it used. The bar's timers are therefore unaffected by U2. Migrating them to strict calls is the §9 follow-up. (U2) |
+| `Compositor::Adapters::HyprlandEvents` | Side effect | `new(socket_path: nil)`: an injected path is used as-is (tests). Otherwise it resolves the socket path through `HyprlandInstance.resolve`, falling back to the env var as today when that returns `nil`, so `start` never raises. Adds `on_closed { |reason| }`. It fires once on a clean EOF (`reason: :eof`), on an exception (`reason:` the message), or when `start` finds no socket path, and is always delivered on the main loop through `GLib::Idle`. Today a clean EOF ends silently. (U2) |
 
 ### 4.2 `Backdrop::Domain` — pure, no GTK, no IO
 
@@ -131,27 +131,27 @@ components never call managers or adapters.
 | `Fit` | `pixel_size(monitor)`: physical `[w, h]` after rotation (axes swapped on odd transform, no scale). `cover_scale(image, monitor)` is `max(W/w, H/h)`. `upscaled?` is true when `cover_scale > 1.0`: this is the "below resolution" badge. `orientation_mismatch?` compares a landscape/portrait image with a portrait/landscape monitor; square never mismatches. `crop_fraction`: share of the image `cover` discards, shown as "crops 44%". |
 | `PaperConf` | `parse(content)` returns `Parsed(assignments:, issues:)` and never raises on user content. Issues are a `desc:`-keyed block, a catch-all block, an unknown key, an unclosed block, or a block with no `# desc:` comment. The last is a note, not an error: identity then comes from the live connector. `render(assignments)` returns the whole file (§3.1) and validates every path and fit mode first. |
 | `SourceCheck` | `sourced?(hyprpaper_conf, managed_path)` checks for an active `source =` line naming the managed file (`~` or absolute form). A missing line makes Apply's persistence a mechanism that writes but nothing reads, so the UI warns. |
-| `ActiveWallpapers` | `parse(listactive_output)` returns `{connector => path}`, splitting each line on the **first** `": "`. Output starting with `error:` raises. Empty output is `{}`, which is a legitimate "nothing active". |
+| `ActiveWallpapers` | `parse(listactive_output)` returns `{connector => path}`, splitting each line on the **first** `": "`. It raises `Malformed` on output starting with `error:`, on any non-blank line without `": "`, or on a line with an empty connector or path. Plain text such as `instance invalid` therefore raises instead of reading as "nothing active". Empty output is `{}`, the one legitimate "nothing active". |
 | `LibrarySettings` | Ordered folder list. `add(path)` expands, requires absolute, and dedupes. `remove(path)`. `to_h` / `from_h` with `version: 1`. `from_h` on an unknown version raises instead of guessing. |
-| `Staging` | Edit state keyed by **description**, not connector. `stage(descriptions, path)`, `stage_all(monitors, path)`, `revert`, `dirty?`, `staged_for(description)`. `resolve(monitors)` returns connector-keyed `Assignment`s, or raises `UnresolvedMonitor` naming **every** description with no connected connector. Never a silent skip. |
+| `Staging` | The **full desired file contents**, not a diff. `Staging.from_saved(assignments)` seeds it with every saved assignment, orphans included. That set is also the `revert` baseline. Entries are keyed by `MonitorKey`: the description when the block recorded one, otherwise `connector:<name>`, so two description-less blocks never collide. Methods: `stage(descriptions, path)`, `stage_all(monitors, path)`, `remap(description, new_connector)` (used for `moved_from`), `revert`, `dirty?` (desired ≠ baseline), `staged_for(key)`, and `touched` (keys the user staged this session). `resolve(monitors)` returns the connector-keyed `Assignment`s to render: each connected entry gets the connector it is currently on, and orphans pass through with their recorded connector. It raises `UnresolvedMonitor` only when a key in `touched` is not connected, and the error names **every** such key. An orphan the user never touched is never an error, and is never dropped. |
 | `Reconciliation` | `call(assignments, monitors, live)` returns one `MonitorState` per connected monitor, plus `orphans`. States: `saved`, `live` (`nil` when hyprpaper is unreachable, which means *unknown*, not *differs*), `drift?` (live known and different from saved), and `moved_from` (the recorded description now sits on another connector). Orphans are saved assignments whose description is not connected. They are kept in the file, and the status line counts and names them. |
-| `ApplyResult` | Per-monitor outcome: `:applied`, `:ipc_failed(reason)` (reason is `:daemon_down`, `:bad_path`, `:invalid_monitor` or `:other`, with the raw text), or `:unverified(expected, actual)`. `summary` produces the status text. It always says whether the file was saved. |
+| `ApplyResult` | `Struct(:connector, :status, :reason, :expected, :actual, :text)`. `status` is `:applied`, `:ipc_failed` or `:unverified`. `reason` (only for `:ipc_failed`) is `:daemon_down`, `:bad_path`, `:invalid_monitor` or `:other`, and `text` holds the raw hyprctl output. `ApplyResult.classify(outcome, expected:, actual:)` builds one. `ApplyReport` = `Struct(:saved, :results, :warnings)`. Its `summary` produces the status text and always says whether the file was saved. |
 
 ### 4.3 Side effects
 
 | Module | Responsibility |
 |--------|----------------|
-| `Backdrop::Adapters::ManagedConfFile` | `PATH = ~/hyprpaper.local.conf`. `read` returns `nil` when the file is **missing** and `""` when it is empty; the two are kept distinct. `write(content)` backs up once per session, writes a temp file in the same dir, fsyncs, then renames. `ensure_exists` creates an empty file if missing. |
+| `Backdrop::Adapters::ManagedConfFile` | `new(path: DEFAULT_PATH, backup_path: DEFAULT_BACKUP)`, with `DEFAULT_PATH = ~/hyprpaper.local.conf` and `DEFAULT_BACKUP = ~/.local/state/backdrop/hyprpaper.local.conf.bak`. Both are constructor arguments so tests use a tmpdir. `read` returns `nil` when the file is **missing** and `""` when it is empty; the two are kept distinct. `write(content)` backs up once per instance, writes a temp file in the same dir, fsyncs, then renames. `ensure_exists` creates an empty file if missing. |
 | `Backdrop::Adapters::SettingsFile` | Reads and writes `settings.json` atomically. The base directory is a constructor argument, so tests never mutate `ENV`. A missing file returns defaults. Malformed JSON raises `SettingsFile::Corrupt`, which the UI shows. It never overwrites a file it could not parse. |
-| `Backdrop::Adapters::HyprpaperConfFile` | Read-only. Reads `~/.config/hypr/hyprpaper.conf` for `SourceCheck`. |
-| `Backdrop::Adapters::HyprpaperIpc` | `set(connector, path, fit_mode)` runs `hyprctl --instance <sig> hyprpaper wallpaper "<c>,<p>,<f>"` as an argv array (no shell). It raises `ArgumentError` on a `desc:` connector (F2). Returns `IpcOutcome(ok:, text:)`. `list_active` returns the raw stdout or raises `HyprpaperIpc::Unreachable` when output matches `failed to connect to hyprpaper` or the exit is non-zero. |
+| `Backdrop::Adapters::HyprpaperConfFile` | Read-only. `new(path: File.expand_path('~/.config/hypr/hyprpaper.conf'))`. That is the path hyprpaper itself reads; it is a symlink to `~/dev/custom/hypr/hyprpaper.conf`. `read` returns `nil` when the file is missing, so the StatusLine can say "hyprpaper.conf not found" rather than the misleading "not sourced". |
+| `Backdrop::Adapters::HyprpaperIpc` | `set(connector, path, fit_mode)` runs `hyprctl --instance <sig> hyprpaper wallpaper "<c>,<p>,<f>"` as an argv array (no shell), with `<sig>` from `HyprlandInstance.resolve!`. It raises `ArgumentError` on a `desc:` connector (F2). Returns `IpcOutcome(ok:, text:)`. `list_active` returns the raw stdout. It raises `HyprpaperIpc::Unreachable` when output matches `failed to connect to hyprpaper`, and `HyprpaperIpc::Error` on any other non-zero exit (for example `instance invalid`, which `listactive` exits 1 on, unlike `monitors -j`). The command runner is injectable. |
 | `Backdrop::Adapters::ImageLibrary` | `scan(folder)` returns `ScanResult(folder:, images:, error:)`. Non-recursive. Extensions `.png .jpg .jpeg`, case-insensitive (the two formats verified on this machine). Dimensions come from `GdkPixbuf::Pixbuf.get_file_info` (header only, no decode). A missing or unreadable folder is `error: "not found: <path>"`, never an empty list. An unreadable image is listed with `error:` set. |
 
 ### 4.4 Managers
 
 | Module | Responsibility |
 |--------|----------------|
-| `Backdrop::Managers::WallpaperStore` | `load` runs the startup flow (§6.2) and returns a `Snapshot(monitors:, assignments:, live:, states:, orphans:, issues:, sourced:)`. `refresh(snapshot)` re-reads monitors and live state and reconciles (§6.3). `apply(staging, monitors)` runs the apply flow (§6.1) and returns `ApplyResult`s. Adapters are injected through the constructor for tests. |
+| `Backdrop::Managers::WallpaperStore` | `load` runs the startup flow (§6.2) and returns a `Snapshot(monitors:, assignments:, live:, states:, orphans:, issues:, sourced:)`. `refresh(snapshot)` re-reads monitors and live state and reconciles (§6.3), returning a new `Snapshot`. `apply(staging, monitors)` runs the apply flow (§6.1). It returns an `ApplyReport`, or raises `Staging::UnresolvedMonitor` / `ManagedConfFile::WriteError` before any IPC. `watch(on_change:, on_closed:)` owns the `HyprlandEvents` instance, so `Window` never touches an adapter. Adapters and a `sleeper:` (default `->(s) { sleep(s) }`, a no-op lambda in tests) are injected through the constructor. |
 | `Backdrop::Managers::Library` | `load` reads settings and scans each folder. `add_folder` / `remove_folder` save settings and rescan. Returns `[ScanResult]`. |
 
 ### 4.5 UI (`Backdrop::UI`, presentation only)
@@ -159,7 +159,7 @@ components never call managers or adapters.
 | Component | Contract |
 |-----------|----------|
 | `MonitorCard` | `new(state, staged:, on_set_here:)`. A preview box sized `Fit.pixel_size / PREVIEW_SCALE`, so a portrait panel draws tall. Inside it, a `Gtk::Picture` with `content_fit = :cover` shows the staged image, or the live one. That is GTK's own cover crop, so the preview matches hyprpaper's centered cover. Badges: orientation mismatch, `upscaled ×1.4`, `crops 44%`, drift ("live differs from saved"), `moved from DP-3`. Header shows the connector and short description. A **Set here** button calls `on_set_here.(description)`. |
-| `ImageGrid` | `new(scan_results, selected:, target_monitors:, on_select:)`. A `Gtk::FlowBox` of `ImageTile`s grouped by folder. A folder with an error renders an error row, not an empty section. Thumbnails decode lazily, one per idle tick through `GtkKit::Timers#on_main_thread`, so a large folder never blocks the loop. Decoding for display counts as presentation, not a side effect: nothing leaves the widget. |
+| `ImageGrid` | `new(scan_results, selected:, target_monitors:, on_select:)`. A `Gtk::FlowBox` of `ImageTile`s grouped by folder. A folder with an error renders an error row, not an empty section. **Noted bucket exception:** thumbnails are decoded inside this component (`GdkPixbuf::Pixbuf.new(file:, width:, height:)` at tile size). The repo rule says adapters return no GTK objects, and a texture is only useful to GTK. The decode runs on one worker thread fed by a queue, and each finished texture is handed to its tile through `GtkKit::Timers#on_main_thread`, so the main loop never waits on a 4K decode. Nothing decoded leaves the widget. |
 | `ImageTile` | Thumbnail and file name, plus badges computed against `target_monitors` (the selected monitor, or every monitor for **Set on all**). |
 | `FolderList` | `new(folders, on_add:, on_remove:)`. Add opens a `Gtk::FileDialog#select_folder`. The chosen path is passed up. |
 | `StatusLine` | Renders the latest `ApplyResult#summary`, load issues, orphan count, the `SourceCheck` warning, and "not watching monitor changes" when events close. |
@@ -168,7 +168,7 @@ components never call managers or adapters.
 
 - `apps/backdrop/main.rb`: Zeitwerk roots for `lib/` and `apps/backdrop/`, with the `ui => UI` inflection. It is not a layer-shell client.
 - `apps/backdrop/application.rb`: `Backdrop::Application < GtkKit::Application`, re-activation presents the existing window (copy hypr-manager).
-- `apps/backdrop/window.rb`: owns `Snapshot`, `Staging`, the selected image, and the scan results. It binds UI callbacks to `WallpaperStore` and `Library`. The action bar has **Set on all**, **Revert** and **Apply**, and Apply is sensitive only when `dirty?`. It subscribes to `HyprlandEvents` (§6.3).
+- `apps/backdrop/window.rb`: owns `Snapshot`, `Staging`, the selected image, and the scan results. It binds UI callbacks to `WallpaperStore` and `Library`. The action bar has **Set on all**, **Revert** and **Apply**, and Apply is sensitive only when `dirty?` and no apply is running. Apply runs `WallpaperStore#apply` on a worker thread, because verification sleeps (§6.1), and delivers the report through `on_main_thread`. Monitor changes arrive through `WallpaperStore#watch` (§6.3). After every `load` or `refresh`, `Window` applies each `moved_from` state to `Staging` with `remap`.
 - `apps/backdrop/assets/backdrop.css`: layered over `assets/base.css`.
 - `bin/backdrop`: same wrapper as `bin/hypr-manager`, plus the `logs/<app>.log` redirect that `bin/bar` has.
 
@@ -215,8 +215,8 @@ sequenceDiagram
   participant F as ManagedConfFile
   participant I as HyprpaperIpc
   W->>S: apply(staging, monitors)
-  S->>D: staging.resolve(monitors)
-  alt any description unresolved
+  S->>D: staging.resolve(monitors) (connected + orphans)
+  alt a touched key is unresolved
     D-->>S: UnresolvedMonitor [descs]
     S-->>W: error, nothing written, no IPC
   end
@@ -229,12 +229,15 @@ sequenceDiagram
   loop each changed monitor
     S->>I: set(connector, path, fit)
   end
-  S->>I: list_active (bounded poll, 5 x 200 ms)
-  S->>D: ApplyResult per monitor
-  S-->>W: results
+  S->>I: list_active (bounded poll via injected sleeper, 5 x 200 ms)
+  S->>D: ApplyResult.classify per monitor
+  S-->>W: ApplyReport (on_main_thread)
   W->>W: StatusLine + cards (drift badge where live != saved)
 ```
 
+- The whole file is rendered from `Staging`, which always holds every saved
+  block, orphans included. Staging DP-2 alone therefore rewrites HDMI-A-1's
+  block unchanged and never drops it.
 - **File first, then IPC.** The file is the source of truth. If the write
   fails, nothing live has changed, so there is nothing to disagree about.
   If IPC fails after a successful write, the file and live state do
@@ -258,16 +261,18 @@ sequenceDiagram
    the `WAYLAND_DISPLAY` searched and the instances seen. There is no
    read-only fallback: every later step needs the compositor.
 2. `ManagedConfFile.ensure_exists`.
-3. `HyprlandIpc.monitors!` → `Compositor::Domain::Monitor`, disabled
-   monitors dropped. An error is shown, never an empty strip.
-4. `ManagedConfFile.read` → `PaperConf.parse`. Issues go to the StatusLine.
-5. `HyprpaperConfFile.read` → `SourceCheck`.
+3. `HyprlandIpc.monitors!` → `Compositor::Domain::Monitor`. An error,
+   including an empty list, is shown. The strip is never silently empty.
+4. `ManagedConfFile.read` → `PaperConf.parse` → `Staging.from_saved`.
+   Issues go to the StatusLine.
+5. `HyprpaperConfFile.read` → `SourceCheck`. `nil` gives the StatusLine
+   message "hyprpaper.conf not found at <path>".
 6. `HyprpaperIpc.list_active` → `ActiveWallpapers.parse`. If `Unreachable`,
    `live = nil` and a banner reads "hyprpaper not running: previews show
    saved choices; Apply will save but cannot switch live".
-7. `Reconciliation.call`. A `moved_from` state pre-stages the assignment on
-   its new connector and marks the window dirty, with a note. Nothing is
-   written until Apply (Q6).
+7. `Reconciliation.call`. For each `moved_from` state, `Window` calls
+   `Staging#remap`, which marks the window dirty, and shows a note. Nothing
+   is written until Apply (Q6).
 8. `Library.load` scans folders. The first run, with no settings file,
    defaults to `~/Pictures` when it exists. That default is not written
    until the user changes the list.
@@ -275,17 +280,22 @@ sequenceDiagram
 
 ### 6.3 Monitor change
 
-1. `HyprlandEvents` subscribes to `monitoraddedv2`, `monitorremovedv2` and
-   `configreloaded`. hypr-manager's Save & Reload emits the last, which
-   covers a rotation change.
-2. Events are debounced: each one (re)arms a 300 ms `after_ms` on the
-   window, because a hotplug fires several.
+1. `WallpaperStore#watch` subscribes its `HyprlandEvents` to
+   `monitoraddedv2`, `monitorremovedv2` and `configreloaded`. hypr-manager's
+   Save & Reload emits the last, which covers a rotation change.
+2. `Window` debounces with a generation counter, because a hotplug fires
+   several events. Each event increments `@refresh_generation` and
+   schedules `after_ms(300)`. The callback captures that generation and
+   does nothing unless it is still current. `after_ms` returns no
+   cancellable handle, so the counter replaces cancellation.
 3. When it fires: `WallpaperStore.refresh` re-runs startup steps 3, 6 and
-   7. `Staging` is keyed by description, so unsaved edits survive a
-   connector renumbering. Cards re-render in their new shape, and crop and
-   orientation badges are recomputed.
-4. `on_closed` shows "not watching monitor changes (event stream closed)"
-   in the StatusLine. A silently stale view is not allowed.
+   7, and `Window` applies any `moved_from` to `Staging`. `Staging` is keyed
+   by description, so unsaved edits survive a connector renumbering. Cards
+   re-render in their new shape, and crop and orientation badges are
+   recomputed.
+4. `on_closed` (on EOF or exception, on the main loop) shows "not watching
+   monitor changes (event stream closed: <reason>)" in the StatusLine. A
+   silently stale view is not allowed.
 
 ## 7. Access control and trust
 
@@ -324,6 +334,16 @@ No test spawns hyprpaper (F13) or mutates `ENV`.
 - Matching instance present while the env signature is stale → the matching one.
 - No match → `NoInstance`, message names the `WAYLAND_DISPLAY` searched and the candidates seen.
 - Two matches → `AmbiguousInstance`.
+- **Miss tests:** `wayland_display` nil or `""` → `MissingKey`, not `NoInstance`. An absolute `/run/user/1000/wayland-1` matches `wl_socket: "wayland-1"`.
+
+`test/compositor/adapters/hyprland_ipc_test.rb` and `hyprland_instance_test.rb` (U2, fake command runner)
+- `monitors!` on rc 0 with `instance invalid` raises `Error` (F11).
+- `monitors!` on a non-zero exit raises, and on `[]` raises.
+- Lenient `monitors` in the same cases returns `[]` and warns with the instance and command. It never raises.
+- `HyprlandInstance.resolve!` on an unparseable `instances -j` raises. `resolve` returns `nil` and warns once.
+
+`test/compositor/adapters/hyprland_events_test.rb` (U2)
+- `on_closed` fires with `:eof` when a `UNIXServer` fixture in a tmpdir closes cleanly, and with the message when it raises. The socket path is injected.
 
 `test/backdrop/domain/paper_conf_test.rb`
 - `render` then `parse` round-trips connector, description, path and fit.
@@ -348,12 +368,17 @@ No test spawns hyprpaper (F13) or mutates `ENV`.
 - Two lines → a two-entry hash.
 - A path containing `": "` splits on the first occurrence only.
 - Empty output → `{}`.
-- `error: …` output raises.
+- `error: …` output raises `Malformed`.
+- **Miss test:** `instance invalid` (no `": "`) raises `Malformed`, and so does a line with an empty connector.
 
 `test/backdrop/domain/staging_test.rb`
-- `stage` one monitor, and `stage_all` for every connected monitor.
-- `dirty?` and `revert`.
-- **Miss test:** `resolve` with a staged description that is not connected raises `UnresolvedMonitor` naming it. With two missing, it names both.
+- `from_saved` then `resolve` with nothing staged returns every saved assignment, orphans included, and `dirty?` is false.
+- Staging DP-2 alone: `resolve` still includes HDMI-A-1's saved block unchanged, plus every orphan.
+- `stage_all` for every connected monitor. `revert` returns to the saved set.
+- Two saved blocks with no description are keyed `connector:HDMI-A-1` and `connector:DP-2`, and both survive `resolve`.
+- `remap` moves an entry to its new connector and sets `dirty?`.
+- An untouched orphan never raises.
+- **Miss test:** a *touched* key that is not connected raises `UnresolvedMonitor` naming it. With two missing, it names both.
 
 `test/backdrop/domain/reconciliation_test.rb`
 - Saved equals live: no drift.
@@ -370,6 +395,7 @@ No test spawns hyprpaper (F13) or mutates `ENV`.
 `test/backdrop/domain/source_check_test.rb`
 - Detects the `~` and absolute forms.
 - Ignores a commented-out `source` line.
+- A `nil` conf (file missing) raises `ArgumentError`. The caller must report "not found" before asking, so a missing file never reads as "not sourced".
 
 `test/backdrop/domain/library_settings_test.rb`
 - `add` expands and dedupes, and rejects relative paths.
@@ -378,7 +404,9 @@ No test spawns hyprpaper (F13) or mutates `ENV`.
 
 ### 8.2 Adapters and managers (steps 4–5)
 
-Adapters, against a tmpdir:
+Adapters, against a tmpdir (paths injected through constructors):
+- `HyprpaperConfFile.read` on a missing path returns `nil`.
+- `HyprpaperIpc` with a fake runner: `failed to connect to hyprpaper` raises `Unreachable`, `instance invalid` with rc 1 raises `Error`, and `set` with `desc:` raises before running anything.
 - `ManagedConfFile` distinguishes a missing file (`nil`) from an empty one (`""`).
 - After `write`, no temp file is left behind.
 - The backup is taken once per session.
@@ -387,8 +415,9 @@ Adapters, against a tmpdir:
 - `ImageLibrary.scan` over committed tiny PNG and JPG fixtures reports the right dimensions.
 - **Miss test:** scanning a missing folder returns `error:`, not `images: []`.
 
-`WallpaperStore`, with fake adapters injected:
+`WallpaperStore`, with fake adapters and a no-op sleeper injected (no real clock):
 - Write happens before IPC (recorded call order).
+- Staging one monitor writes a file that still contains the other saved blocks and the orphans.
 - A write failure means zero IPC calls.
 - `UnresolvedMonitor` means no write and no IPC.
 - IPC `daemon_down` gives a result that says "saved, not live".
@@ -396,7 +425,7 @@ Adapters, against a tmpdir:
 - Unchanged monitors get no IPC call.
 - `load` with `list_active` unreachable gives `live: nil` plus a banner issue, not an exception.
 - `load` when `monitors!` raises propagates the error. It never returns an empty snapshot.
-- A `desc:` connector reaching `HyprpaperIpc.set` raises (adapter unit test).
+- `watch` forwards the events' `on_closed` to its caller.
 
 `Library` manager, with fake adapters: add/remove persists and rescans.
 
@@ -425,9 +454,9 @@ Record the before/after `listactive` in the PR.
 | Unit | Scope | Depends on | Repo |
 |------|-------|-----------|------|
 | **U1** | Promote `Monitor` to `lib/compositor/domain/monitor.rb`. Add characterization tests first. Add a `lib/` root to `test_helper`. Point hypr-manager at `Compositor::Domain::Monitor`. Pure move, no behaviour change. | — | widgets |
-| **U2** | `InstanceChoice` + `HyprlandInstance`. `--instance` on every `HyprlandIpc` call. Strict `monitors!`. `HyprlandEvents` uses the resolved instance and gains `on_closed`. Tests per §8.1/§8.3. | U1 (loader) | widgets |
+| **U2** | `InstanceChoice` + `HyprlandInstance`. `--instance` on every `HyprlandIpc` call, with injectable command runners. Strict `monitors!`. The lenient methods keep their never-raise contract. `HyprlandEvents` uses the resolved instance and gains `on_closed`. Tests per §8.1/§8.3. | U1 (loader) | widgets |
 | **U3** | The paired dotfiles change in §5, in the order given, with the listactive before/after in the commit. | — (parallel with U1/U2) | `~/dev/custom` |
-| **U4** | All `Backdrop::Domain` modules and their tests (§8.1). | U1 | widgets |
+| **U4** | All `Backdrop::Domain` modules and their tests (§8.1). Adds `module Backdrop; end` and an `apps/backdrop` root to `test/test_helper.rb`. | U1 | widgets |
 | **U5** | Backdrop adapters and managers, with tests (§8.2), plus the read-only integration tests (§8.3). | U2, U4 | widgets |
 | **U6** | UI, framework, CSS, `bin/backdrop`, and README/CLAUDE.md app-list entries. Manual live verification (§8.4). | U5, U3 | widgets |
 
