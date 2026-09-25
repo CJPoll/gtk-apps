@@ -160,7 +160,7 @@ components never call managers or adapters.
 
 | Module | Responsibility |
 |--------|----------------|
-| `Backdrop::Managers::WallpaperStore` | `load` runs the startup flow (§6.2) and returns a `Snapshot(monitors:, assignments:, live:, states:, orphans:, issues:, sourced:)`. `refresh(snapshot)` re-reads monitors and live state and reconciles (§6.3), returning a new `Snapshot`. `apply(resolved)` runs the apply flow (§6.1) on a `Resolved` that `Window` built. It raises only **before the write**: `PaperConf::InvalidAssignment` (path or fit), `ManagedConfFile::WriteError`. Once the write succeeds it **always returns** an `ApplyReport(saved: true, …)`. Every IPC, instance-resolution or verification error after that point becomes a per-monitor `:ipc_failed` or `:unconfirmed` result, never an exception. The report also carries `resolved.displaced` and the removed issue blocks as warnings. `watch(on_change:, on_closed:)` owns the `HyprlandEvents` instance, so `Window` never touches an adapter. Adapters and a `sleeper:` (default `->(s) { sleep(s) }`, a no-op lambda in tests) are injected through the constructor. |
+| `Backdrop::Managers::WallpaperStore` | `load` runs the startup flow (§6.2) and returns a `Snapshot(monitors:, assignments:, live:, states:, orphans:, issues:, sourced:)`. `refresh(snapshot)` re-reads monitors and live state and reconciles (§6.3), returning a new `Snapshot`. `apply(resolved, baseline:)` runs the apply flow (§6.1) on a `Resolved` that `Window` built. It raises only **before the write**: `PaperConf::InvalidAssignment` (path or fit), `ManagedConfFile::WriteError`. Once the write succeeds it **always returns** an `ApplyReport(saved: true, …)`. Every IPC, instance-resolution or verification error after that point becomes a per-monitor `:ipc_failed` or `:unconfirmed` result, never an exception. `ApplyReport.warnings` includes `resolved.warnings`, `resolved.displaced`, and the removed issue blocks, so nothing leaves the file unannounced. `apply(resolved, baseline:)` takes `baseline:`, the `Snapshot`'s saved assignments and live map, which `Window` passes in. That is how it decides which monitors need IPC. `watch(on_change:, on_closed:)` owns the `HyprlandEvents` instance, so `Window` never touches an adapter. Adapters and a `sleeper:` (default `->(s) { sleep(s) }`, a no-op lambda in tests) are injected through the constructor. |
 | `Backdrop::Managers::Library` | `load` reads settings and scans each folder. `add_folder` / `remove_folder` save settings and rescan. Returns `[ScanResult]`. |
 
 ### 4.5 UI (`Backdrop::UI`, presentation only)
@@ -252,8 +252,9 @@ sequenceDiagram
   disagree, and the result says so explicitly: "Saved. Live switch failed
   on HDMI-A-1 (hyprpaper not running). The saved wallpaper applies when
   hyprpaper next starts." The card keeps its drift badge until live matches.
-- IPC is sent only for monitors whose staged assignment differs from what
-  was saved or from what is live.
+- IPC is sent only for monitors whose staged assignment differs from the
+  `baseline:` that `Window` passes from its `Snapshot` (saved, or live when
+  known).
 - Verification runs even when every call returned rc 0 (F4). The bounded
   poll covers apply latency. If live still differs at the end, the result
   is `:unverified(expected, actual)`, and the message names the likely
@@ -436,6 +437,7 @@ Adapters, against a tmpdir (paths injected through constructors):
 `WallpaperStore`, with fake adapters and a no-op sleeper injected (no real clock):
 - Write happens before IPC (recorded call order).
 - Staging one monitor writes a file that still contains the other saved blocks and the orphans.
+- A `connector:` entry dropped during re-keying appears in `ApplyReport#summary`.
 - A write failure means zero IPC calls.
 - `apply` receives an already-`Resolved` value, so `UnresolvedMonitor` never reaches it. (That is a `Staging` test, above.) A `PaperConf::InvalidAssignment` raised by `render` means no write and no IPC.
 - IPC `daemon_down` gives a result that says "saved, not live".
