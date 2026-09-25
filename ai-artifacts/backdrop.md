@@ -103,6 +103,11 @@ wallpaper {
   newly plugged one.
 - An empty assignment set renders the header only. That was verified valid
   (F9).
+- A displaced orphan (§4.2 `Staging`) renders as one inert comment line,
+  `# orphan desc=<description> connector=<connector> fit=<mode> path=<path>`,
+  with `path` last because paths may contain spaces. `parse` reads it back
+  into `Staging`, so the panel's choice survives until it is reconnected
+  and applied.
 
 ## 4. Modules, bucket by bucket
 
@@ -116,9 +121,9 @@ components never call managers or adapters.
 |--------|--------|--------|
 | `Compositor::Domain::Monitor` (`lib/compositor/domain/monitor.rb`) | Domain | **Moved** from `HyprManager::Domain::Monitor`, unchanged. hypr-manager references the new constant. (U1) |
 | `Compositor::Domain::InstanceChoice` (`lib/compositor/domain/instance_choice.rb`) | Domain | New. `pick(instances, wayland_display:)` returns a signature. It raises `InstanceError` subclasses, each naming the key it searched for and the candidates it saw: `MissingKey` when `wayland_display` is nil or empty (a resolution failure, never "no match"), `NoInstance` when nothing matches, `AmbiguousInstance` when more than one does. Both sides are compared by `File.basename`, so `wayland-1` and `/run/user/1000/wayland-1` match. (U2) |
-| `Compositor::Adapters::HyprlandInstance` | Side effect | New. Runs `hyprctl instances -j` and raises `InstanceError` on a non-zero exit or unparseable output, before `pick` ever sees a list. Then calls `InstanceChoice.pick` with `ENV['WAYLAND_DISPLAY']`. The result, or the error, is memoized per process. `resolve!` raises. `resolve` returns `nil` and warns once with the error's message, for lenient callers. The command runner is injectable for tests. (U2) |
+| `Compositor::Adapters::HyprlandInstance` | Side effect | New. Runs `hyprctl instances -j` and raises `InstanceError` on a non-zero exit or unparseable output, before `pick` ever sees a list. Then calls `InstanceChoice.pick` with `ENV['WAYLAND_DISPLAY']`. The result, or the error, is memoized on the instance (a module-level default instance serves production callers), so tests build fresh instances and never depend on run order. `resolve!` raises. `resolve` returns `nil` and warns once with the error's message, for lenient callers. The command runner is injectable for tests. (U2) |
 | `Compositor::Adapters::HyprlandIpc` | Side effect | Every call passes `--instance <sig>` when `HyprlandInstance.resolve` returns one. The command runner is injectable. New `monitors!` calls `resolve!`, and raises `HyprlandIpc::Error` on a non-zero exit, on unparseable output (F11: `instance invalid` with rc 0), or on an empty list (a running compositor always has a monitor). **The lenient methods keep today's contract exactly:** `monitors`, `workspaces` and `active_workspace` never raise. When resolution fails they fall back to the inherited environment, as today. Every failure warns with the instance and command it used. The bar's timers are therefore unaffected by U2. Migrating them to strict calls is the §9 follow-up. (U2) |
-| `Compositor::Adapters::HyprlandEvents` | Side effect | `new(socket_path: nil)`: an injected path is used as-is (tests). Otherwise it resolves the socket path through `HyprlandInstance.resolve`, falling back to the env var as today when that returns `nil`, so `start` never raises. Adds `on_closed { |reason| }`. It fires once on a clean EOF (`reason: :eof`), on an exception (`reason:` the message), or when `start` finds no socket path, and is always delivered on the main loop through `GLib::Idle`. Today a clean EOF ends silently. (U2) |
+| `Compositor::Adapters::HyprlandEvents` | Side effect | `new(socket_path: nil, dispatch: ->(&b) { GLib::Idle.add { b.call; false } })`: an injected path is used as-is, and tests inject an immediate `dispatch`, so they need no GLib main context. Otherwise it resolves the socket path through `HyprlandInstance.resolve`, falling back to the env var as today when that returns `nil`, so `start` never raises. Adds `on_closed { |reason| }`. It fires once on a clean EOF (`reason: :eof`), on an exception (`reason:` the message), or when `start` finds no socket path, and is always delivered through `dispatch`, which defaults to the main loop. Today a clean EOF ends silently. (U2) |
 
 ### 4.2 `Backdrop::Domain` — pure, no GTK, no IO
 
@@ -129,13 +134,13 @@ components never call managers or adapters.
 | `ImagePath` | `validate!(path)`: absolute, and no `,` (F6), no `#`, no newline. Returns the path or raises `InvalidPath` with the offending character named. |
 | `ImageFile` | `Struct(:path, :width, :height)` plus `orientation` (`:landscape`, `:portrait`, `:square`). |
 | `Fit` | `pixel_size(monitor)`: physical `[w, h]` after rotation (axes swapped on odd transform, no scale). `cover_scale(image, monitor)` is `max(W/w, H/h)`. `upscaled?` is true when `cover_scale > 1.0`: this is the "below resolution" badge. `orientation_mismatch?` compares a landscape/portrait image with a portrait/landscape monitor; square never mismatches. `crop_fraction`: share of the image `cover` discards, shown as "crops 44%". |
-| `PaperConf` | `parse(content)` returns `Parsed(assignments:, issues:)` and never raises on user content. Issues are a `desc:`-keyed block, a catch-all block, an unknown key, an unclosed block, or a block with no `# desc:` comment. The last is a note, not an error: identity then comes from the live connector. `render(assignments)` returns the whole file (§3.1) and validates every path and fit mode first. |
+| `PaperConf` | `parse(content)` returns `Parsed(assignments:, issues:)` and never raises on user content. Issues are a `desc:`-keyed block, a catch-all block, an unknown key, an unclosed block, or a block with no `# desc:` comment. The last is a note, not an error: identity then comes from the live connector. `render(resolved)` returns the whole file (§3.1), active blocks plus orphan comment records, and validates every path and fit mode first. **Issue blocks are not assignments.** They never enter `Staging`, so `render` never writes a `desc:` or catch-all block back. Apply's report names each issue block it removed. |
 | `SourceCheck` | `sourced?(hyprpaper_conf, managed_path)` checks for an active `source =` line naming the managed file (`~` or absolute form). A missing line makes Apply's persistence a mechanism that writes but nothing reads, so the UI warns. |
 | `ActiveWallpapers` | `parse(listactive_output)` returns `{connector => path}`, splitting each line on the **first** `": "`. It raises `Malformed` on output starting with `error:`, on any non-blank line without `": "`, or on a line with an empty connector or path. Plain text such as `instance invalid` therefore raises instead of reading as "nothing active". Empty output is `{}`, the one legitimate "nothing active". |
 | `LibrarySettings` | Ordered folder list. `add(path)` expands, requires absolute, and dedupes. `remove(path)`. `to_h` / `from_h` with `version: 1`. `from_h` on an unknown version raises instead of guessing. |
-| `Staging` | The **full desired file contents**, not a diff. `Staging.from_saved(assignments)` seeds it with every saved assignment, orphans included. That set is also the `revert` baseline. Entries are keyed by `MonitorKey`: the description when the block recorded one, otherwise `connector:<name>`, so two description-less blocks never collide. Methods: `stage(descriptions, path)`, `stage_all(monitors, path)`, `remap(description, new_connector)` (used for `moved_from`), `revert`, `dirty?` (desired ≠ baseline), `staged_for(key)`, and `touched` (keys the user staged this session). `resolve(monitors)` returns the connector-keyed `Assignment`s to render: each connected entry gets the connector it is currently on, and orphans pass through with their recorded connector. It raises `UnresolvedMonitor` only when a key in `touched` is not connected, and the error names **every** such key. An orphan the user never touched is never an error, and is never dropped. |
+| `Staging` | The **full desired file contents**, not a diff. `Staging.from_saved(assignments)` seeds it with every saved assignment, orphans included. That set is also the `revert` baseline. Entries are keyed by `MonitorKey`: the description when the block recorded one, otherwise `connector:<name>`, so two description-less blocks never collide. Methods: `stage(descriptions, path)`, `stage_all(monitors, path)`, `remap(description, new_connector)` (used for `moved_from`), `revert`, `dirty?` (desired ≠ baseline), `staged_for(key)`, and `touched` (keys the user staged this session). `resolve(monitors)` returns the connector-keyed `Assignment`s to render: each connected entry gets the connector it is currently on, and orphans pass through with their recorded connector. **A connected entry wins any connector collision.** An orphan whose recorded connector is now used by a connected entry is *displaced*: it is kept as an `OrphanRecord`, which renders as an inert comment line and targets no monitor. A non-colliding orphan keeps its active block, so replugging the same panel into the same port restores its wallpaper with no app running. `resolve` returns `Resolved(assignments:, displaced:)`. It raises `UnresolvedMonitor` only when a key in `touched` is not connected, and the error names **every** such key. An orphan the user never touched is never an error, and is never dropped. |
 | `Reconciliation` | `call(assignments, monitors, live)` returns one `MonitorState` per connected monitor, plus `orphans`. States: `saved`, `live` (`nil` when hyprpaper is unreachable, which means *unknown*, not *differs*), `drift?` (live known and different from saved), and `moved_from` (the recorded description now sits on another connector). Orphans are saved assignments whose description is not connected. They are kept in the file, and the status line counts and names them. |
-| `ApplyResult` | `Struct(:connector, :status, :reason, :expected, :actual, :text)`. `status` is `:applied`, `:ipc_failed` or `:unverified`. `reason` (only for `:ipc_failed`) is `:daemon_down`, `:bad_path`, `:invalid_monitor` or `:other`, and `text` holds the raw hyprctl output. `ApplyResult.classify(outcome, expected:, actual:)` builds one. `ApplyReport` = `Struct(:saved, :results, :warnings)`. Its `summary` produces the status text and always says whether the file was saved. |
+| `ApplyResult` | `Struct(:connector, :status, :reason, :expected, :actual, :text)`. `status` is `:applied`, `:ipc_failed`, `:unverified` (live read and it differs), or `:unconfirmed` (live could not be read during verification, so the outcome is unknown, never assumed applied). `reason` (for `:ipc_failed` and `:unconfirmed`) is `:daemon_down`, `:bad_path`, `:invalid_monitor`, `:error` or `:other`, and `text` holds the raw hyprctl output. `ApplyResult.classify(outcome, expected:, actual:)` builds one. `ApplyReport` = `Struct(:saved, :results, :warnings)`. Its `summary` produces the status text and always says whether the file was saved. |
 
 ### 4.3 Side effects
 
@@ -151,7 +156,7 @@ components never call managers or adapters.
 
 | Module | Responsibility |
 |--------|----------------|
-| `Backdrop::Managers::WallpaperStore` | `load` runs the startup flow (§6.2) and returns a `Snapshot(monitors:, assignments:, live:, states:, orphans:, issues:, sourced:)`. `refresh(snapshot)` re-reads monitors and live state and reconciles (§6.3), returning a new `Snapshot`. `apply(staging, monitors)` runs the apply flow (§6.1). It returns an `ApplyReport`, or raises `Staging::UnresolvedMonitor` / `ManagedConfFile::WriteError` before any IPC. `watch(on_change:, on_closed:)` owns the `HyprlandEvents` instance, so `Window` never touches an adapter. Adapters and a `sleeper:` (default `->(s) { sleep(s) }`, a no-op lambda in tests) are injected through the constructor. |
+| `Backdrop::Managers::WallpaperStore` | `load` runs the startup flow (§6.2) and returns a `Snapshot(monitors:, assignments:, live:, states:, orphans:, issues:, sourced:)`. `refresh(snapshot)` re-reads monitors and live state and reconciles (§6.3), returning a new `Snapshot`. `apply(staging, monitors)` runs the apply flow (§6.1). It raises only **before the write**: `Staging::UnresolvedMonitor`, `PaperConf::InvalidAssignment` (path or fit), `ManagedConfFile::WriteError`. Once the write succeeds it **always returns** an `ApplyReport(saved: true, …)`. Every IPC, instance-resolution or verification error after that point becomes a per-monitor `:ipc_failed` or `:unconfirmed` result, never an exception. The report also carries `resolved.displaced` and the removed issue blocks as warnings. `watch(on_change:, on_closed:)` owns the `HyprlandEvents` instance, so `Window` never touches an adapter. Adapters and a `sleeper:` (default `->(s) { sleep(s) }`, a no-op lambda in tests) are injected through the constructor. |
 | `Backdrop::Managers::Library` | `load` reads settings and scans each folder. `add_folder` / `remove_folder` save settings and rescan. Returns `[ScanResult]`. |
 
 ### 4.5 UI (`Backdrop::UI`, presentation only)
@@ -162,13 +167,13 @@ components never call managers or adapters.
 | `ImageGrid` | `new(scan_results, selected:, target_monitors:, on_select:)`. A `Gtk::FlowBox` of `ImageTile`s grouped by folder. A folder with an error renders an error row, not an empty section. **Noted bucket exception:** thumbnails are decoded inside this component (`GdkPixbuf::Pixbuf.new(file:, width:, height:)` at tile size). The repo rule says adapters return no GTK objects, and a texture is only useful to GTK. The decode runs on one worker thread fed by a queue, and each finished texture is handed to its tile through `GtkKit::Timers#on_main_thread`, so the main loop never waits on a 4K decode. Nothing decoded leaves the widget. |
 | `ImageTile` | Thumbnail and file name, plus badges computed against `target_monitors` (the selected monitor, or every monitor for **Set on all**). |
 | `FolderList` | `new(folders, on_add:, on_remove:)`. Add opens a `Gtk::FileDialog#select_folder`. The chosen path is passed up. |
-| `StatusLine` | Renders the latest `ApplyResult#summary`, load issues, orphan count, the `SourceCheck` warning, and "not watching monitor changes" when events close. |
+| `StatusLine` | Renders the latest `ApplyReport#summary` (or the worker's error), load issues, orphan count, the `SourceCheck` warning, and "not watching monitor changes" when events close. |
 
 ### 4.6 Framework
 
 - `apps/backdrop/main.rb`: Zeitwerk roots for `lib/` and `apps/backdrop/`, with the `ui => UI` inflection. It is not a layer-shell client.
 - `apps/backdrop/application.rb`: `Backdrop::Application < GtkKit::Application`, re-activation presents the existing window (copy hypr-manager).
-- `apps/backdrop/window.rb`: owns `Snapshot`, `Staging`, the selected image, and the scan results. It binds UI callbacks to `WallpaperStore` and `Library`. The action bar has **Set on all**, **Revert** and **Apply**, and Apply is sensitive only when `dirty?` and no apply is running. Apply runs `WallpaperStore#apply` on a worker thread, because verification sleeps (§6.1), and delivers the report through `on_main_thread`. Monitor changes arrive through `WallpaperStore#watch` (§6.3). After every `load` or `refresh`, `Window` applies each `moved_from` state to `Staging` with `remap`.
+- `apps/backdrop/window.rb`: owns `Snapshot`, `Staging`, the selected image, and the scan results. It binds UI callbacks to `WallpaperStore` and `Library`. The action bar has **Set on all**, **Revert** and **Apply**, and Apply is sensitive only when `dirty?` and no apply is running. Apply runs `WallpaperStore#apply` on a worker thread, because verification sleeps (§6.1). The worker gets a **frozen copy** of `Staging`, since Set here stays live on the main thread. The worker body rescues `StandardError` and hands either the report or the error to the main thread through `on_main_thread`. An `ensure` clears the running flag, so a failure can never leave Apply disabled. When a report with `saved: true` arrives, `Window` rebuilds `Staging` with `from_saved` from what was written, which resets `dirty?` and `touched`. Monitor changes arrive through `WallpaperStore#watch` (§6.3). After every `load` or `refresh`, `Window` applies each `moved_from` state to `Staging` with `remap`.
 - `apps/backdrop/assets/backdrop.css`: layered over `assets/base.css`.
 - `bin/backdrop`: same wrapper as `bin/hypr-manager`, plus the `logs/<app>.log` redirect that `bin/bar` has.
 
@@ -231,7 +236,7 @@ sequenceDiagram
   end
   S->>I: list_active (bounded poll via injected sleeper, 5 x 200 ms)
   S->>D: ApplyResult.classify per monitor
-  S-->>W: ApplyReport (on_main_thread)
+  S-->>W: ApplyReport (Window hops to the main thread)
   W->>W: StatusLine + cards (drift badge where live != saved)
 ```
 
@@ -257,7 +262,7 @@ sequenceDiagram
 
 ### 6.2 Startup
 
-1. `HyprlandInstance.resolve`. On failure, show a blocking error that names
+1. `HyprlandInstance.resolve!`. On failure, show a blocking error that names
    the `WAYLAND_DISPLAY` searched and the instances seen. There is no
    read-only fallback: every later step needs the compositor.
 2. `ManagedConfFile.ensure_exists`.
@@ -289,8 +294,13 @@ sequenceDiagram
    does nothing unless it is still current. `after_ms` returns no
    cancellable handle, so the counter replaces cancellation.
 3. When it fires: `WallpaperStore.refresh` re-runs startup steps 3, 6 and
-   7, and `Window` applies any `moved_from` to `Staging`. `Staging` is keyed
-   by description, so unsaved edits survive a connector renumbering. Cards
+   7, and `Window` applies any `moved_from` to `Staging`. `Window` rescues
+   `StandardError` from `refresh`, because an exception inside an `after_ms`
+   callback unwinds the GLib main loop. `monitors!` raises on an empty list,
+   which can happen mid-hotplug. On error it keeps the last good
+   `Snapshot`, shows "monitor refresh failed: <message>", and the next
+   event retries. Entries keyed by description survive a connector
+   renumbering; `connector:` keys (blocks with no `# desc:`) do not. Cards
    re-render in their new shape, and crop and orientation badges are
    recomputed.
 4. `on_closed` (on EOF or exception, on the main loop) shows "not watching
@@ -351,7 +361,8 @@ No test spawns hyprpaper (F13) or mutates `ENV`.
 - `render` output is sorted by connector.
 - `render` raises on an invalid path or fit mode.
 - A block without a `# desc:` comment parses with `description: nil` and a note issue.
-- A `desc:`-keyed block, a catch-all block, an unknown key, and an unclosed block each yield an issue and do not raise.
+- A `desc:`-keyed block, a catch-all block, an unknown key, and an unclosed block each yield an issue, do not raise, and produce no `Assignment`.
+- An orphan comment record round-trips through `render` and `parse`, including a path with spaces.
 
 `test/backdrop/domain/image_path_test.rb`
 - Accepts an absolute path with spaces.
@@ -378,6 +389,7 @@ No test spawns hyprpaper (F13) or mutates `ENV`.
 - Two saved blocks with no description are keyed `connector:HDMI-A-1` and `connector:DP-2`, and both survive `resolve`.
 - `remap` moves an entry to its new connector and sets `dirty?`.
 - An untouched orphan never raises.
+- **Collision:** an orphan recorded on `HDMI-A-1` plus a connected panel now on `HDMI-A-1` resolve to exactly one active `HDMI-A-1` assignment (the connected one). The orphan appears in `displaced`.
 - **Miss test:** a *touched* key that is not connected raises `UnresolvedMonitor` naming it. With two missing, it names both.
 
 `test/backdrop/domain/reconciliation_test.rb`
@@ -390,6 +402,7 @@ No test spawns hyprpaper (F13) or mutates `ENV`.
 `test/backdrop/domain/apply_result_test.rb`
 - Classifies each measured F5 message.
 - rc 0 but live unchanged → `:unverified`.
+- Live unreadable during verification → `:unconfirmed`, never `:applied`.
 - `summary` always states whether the file was saved.
 
 `test/backdrop/domain/source_check_test.rb`
@@ -409,7 +422,7 @@ Adapters, against a tmpdir (paths injected through constructors):
 - `HyprpaperIpc` with a fake runner: `failed to connect to hyprpaper` raises `Unreachable`, `instance invalid` with rc 1 raises `Error`, and `set` with `desc:` raises before running anything.
 - `ManagedConfFile` distinguishes a missing file (`nil`) from an empty one (`""`).
 - After `write`, no temp file is left behind.
-- The backup is taken once per session.
+- The backup is taken once per `ManagedConfFile` instance.
 - `ensure_exists` never truncates existing content.
 - `SettingsFile`: a corrupt file raises and is left untouched.
 - `ImageLibrary.scan` over committed tiny PNG and JPG fixtures reports the right dimensions.
@@ -422,6 +435,10 @@ Adapters, against a tmpdir (paths injected through constructors):
 - `UnresolvedMonitor` means no write and no IPC.
 - IPC `daemon_down` gives a result that says "saved, not live".
 - rc 0 with `list_active` unchanged gives `:unverified`.
+- `list_active` raising during verification returns a report with `saved: true` and `:unconfirmed`. It does not raise.
+- `set` failing to resolve an instance after the write returns `saved: true` with `:ipc_failed`.
+- An invalid path raises before the write, and the file is untouched.
+- `refresh` raising leaves the caller's snapshot unchanged, because the store never mutates it.
 - Unchanged monitors get no IPC call.
 - `load` with `list_active` unreachable gives `live: nil` plus a banner issue, not an exception.
 - `load` when `monitors!` raises propagates the error. It never returns an empty snapshot.
@@ -490,3 +507,12 @@ Each has a default the design already uses. None blocks U1–U5.
   still links it. This doc follows the repo's CLAUDE.md/README voice instead.
 - hypr-manager's `bin/hypr-manager` lacks the `logs/<app>.log` redirect that
   CLAUDE.md describes for `bin/*`. Out of scope here. Noted as a finding.
+- **Measure before relying on the worker threads (U6).** The thumbnail and
+  Apply workers keep the UI responsive only if the blocking calls release
+  Ruby's GVL. `sleep` and subprocess waits do. Whether Ruby-GNOME releases
+  it inside `GdkPixbuf::Pixbuf.new(file:…)` is unverified, and so is
+  whether building a `Gdk::Texture` off the main thread is safe. The U6
+  captain measures both (time a 4K decode on the worker while a main-loop
+  `every_ms(16)` tick counts misses). If the decode does not release the
+  GVL, the fallback is one decode per idle tick on the main loop, with the
+  measured cost recorded.
