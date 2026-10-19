@@ -8,6 +8,15 @@ export PATH="/home/cjpoll/bin/:$PATH"
 # libruby"). Gems here resolve only through bundler/setup and the user gem dir.
 unset RUBYLIB RUBYOPT GEM_HOME GEM_PATH BUNDLE_GEMFILE BUNDLE_BIN_PATH BUNDLER_VERSION
 
+# The Identify-screen overlays are layer-shell surfaces. gtk4-layer-shell must
+# interpose libwayland-client symbols before GTK connects to the compositor, so
+# preload it (see bin/bar); ordinary windows are unaffected by it.
+export LD_PRELOAD=/usr/lib64/libgtk4-layer-shell.so
+
+# GL renderer, as bin/bar: GTK 4.20's Vulkan swapchain races surface teardown,
+# and the overlays are created and destroyed on every Identify click.
+export GSK_RENDERER=gl
+
 ROOT="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
 cd "$ROOT"
 

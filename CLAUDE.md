@@ -24,6 +24,10 @@ Hyprland (Wayland) system. Current apps:
   workspace→monitor binds (drag chips). Writes monitors by EDID desc:, owns
   only the monitor/workspace span of the file, and applies via hyprctl
   reload. User-owned file — the only app with no sudo path at all.
+  Each card has an Identify screen button: a layer-shell OVERLAY panel
+  (number, port, model) appears on that physical output for ~2.5s, so it is
+  the one app that is an ordinary window plus layer-shell overlays
+  (bin/hypr-manager preloads libgtk4-layer-shell for this).
 - **greeter** — planned: controller-navigable greetd greeter (fullscreen, not
   layer-shell; deployed to /opt so the unprivileged greetd user can run it).
   See `ai-artifacts/greeter.md` for its design.
