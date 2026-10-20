@@ -89,6 +89,11 @@ The brightness widget needs no tool: it reads and writes
 Only `hyprctl` (from Hyprland itself). Writes `~/hyprland.local.conf` —
 user-owned; the one app with no sudo path at all.
 
+Each display card's **Identify screen** button flashes a large overlay
+(display number, port, model) on that physical monitor for a couple of
+seconds. It is a layer-shell surface, so `bin/hypr-manager` preloads
+`libgtk4-layer-shell` (package `gui-libs/gtk4-layer-shell`, USE=introspection).
+
 ### Fonts
 
 The stylesheets and widget labels use Nerd Font glyphs:

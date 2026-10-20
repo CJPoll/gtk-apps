@@ -2,6 +2,13 @@
 
 module HyprManager
   class Window < Gtk::Window
+    IDENTIFY_MESSAGES = {
+      shown: nil,
+      not_connected: 'That display is no longer connected',
+      no_output: 'The compositor has not exposed that display yet; try again',
+      unsupported: 'Identify needs layer-shell; launch via bin/hypr-manager'
+    }.freeze
+
     def initialize(application:)
       super()
       set_application(application)
@@ -9,11 +16,13 @@ module HyprManager
       set_default_size(980, 520)
 
       @store = Managers::ConfigStore.new
+      @identifier = Managers::ScreenIdentifier.new(overlay_maker: UI::IdentifyOverlay.method(:present_on))
       @state = @store.load
       @dirty = false
 
       setup_ui
       render
+      signal_connect('close-request') { @identifier.close_all; false }
     end
 
     private
@@ -72,7 +81,8 @@ module HyprManager
           on_reorder: method(:reorder),
           on_mode_change: method(:change_mode),
           on_transform_change: method(:change_transform),
-          on_assign: method(:assign)
+          on_assign: method(:assign),
+          on_identify: method(:identify)
         )
         @strip.append(card)
       end
@@ -80,9 +90,13 @@ module HyprManager
       clear_children(@tray_holder)
       @tray_holder.append(UI::ChipTray.new(@state.assignments.unassigned, on_unassign: method(:unassign)))
 
-      @status.text = @dirty ? 'Unsaved changes' : 'In sync with ~/hyprland.local.conf'
+      show_sync_status
       @save.sensitive = @dirty
       @revert.sensitive = @dirty
+    end
+
+    def show_sync_status
+      @status.text = @dirty ? 'Unsaved changes' : 'In sync with ~/hyprland.local.conf'
     end
 
     def clear_children(box)
@@ -121,6 +135,15 @@ module HyprManager
     def unassign(workspace_id)
       @state.assignments.unassign(workspace_id)
       mutated
+    end
+
+    def identify(description)
+      position = @state.layout.monitors.index { |monitor| monitor.description == description }
+      return if position.nil?
+
+      result = @identifier.identify(@state.layout.monitors[position], position: position)
+      message = IDENTIFY_MESSAGES.fetch(result)
+      message ? @status.text = message : show_sync_status
     end
 
     def save

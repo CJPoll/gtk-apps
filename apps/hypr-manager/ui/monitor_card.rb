@@ -5,18 +5,20 @@ module HyprManager
     # One connected display: a proportional preview, resolution and rotation
     # selectors, and the workspaces bound to it. The header is a drag handle
     # for left-right reordering; the whole card accepts drops of workspace
-    # chips (bind here) and other cards (take their slot).
+    # chips (bind here) and other cards (take their slot). The Identify
+    # button asks (on_identify) for an overlay on this card's physical screen.
     class MonitorCard < Gtk::Box
       PREVIEW_SCALE = 14
 
       def initialize(monitor, workspace_ids:, on_reorder:, on_mode_change:,
-                     on_transform_change:, on_assign:)
+                     on_transform_change:, on_assign:, on_identify:)
         super(:vertical, 6)
         @monitor = monitor
         @on_reorder = on_reorder
         @on_mode_change = on_mode_change
         @on_transform_change = on_transform_change
         @on_assign = on_assign
+        @on_identify = on_identify
 
         build(workspace_ids)
         setup_drop
@@ -32,6 +34,7 @@ module HyprManager
         append(build_mode_combo)
         append(build_transform_combo)
         append(build_chips(workspace_ids))
+        append(build_identify_button)
       end
 
       def build_handle
@@ -109,6 +112,14 @@ module HyprManager
           end
         end
         row
+      end
+
+      def build_identify_button
+        button = Gtk::Button.new(label: 'Identify screen')
+        button.add_css_class('identify-button')
+        button.tooltip_text = 'Flash this display number on its physical screen'
+        button.signal_connect('clicked') { @on_identify.call(@monitor.description) }
+        button
       end
 
       def setup_drop
