@@ -51,8 +51,9 @@ module Bar
         sinks.each do |sink|
           label = "#{get_sink_icon(sink[:name])} #{short_name(sink[:name])}"
           menu.add_item(label, sensitive: sink[:id] != current_id) do
-            if bluetooth_sink?(sink[:name])
-              switch_to_a2dp
+            node_name = sink_name_for(sink[:id])
+            if Bar::Domain::AudioSink.bluetooth?(node_name)
+              switch_to_a2dp(node_name)
             else
               set_default_sink(sink[:id])
             end
@@ -143,39 +144,16 @@ module Bar
         nil
       end
 
-      def bluetooth_sink?(sink_name)
-        sink_name.to_s.match?(/WH-1000XM5|bluez|Bluetooth/i)
-      end
-
-      def switch_to_a2dp
-        card_name = find_bluez_card
+      # Targets the sink that was clicked: with several bluetooth devices paired,
+      # "the first bluez card" is whichever device happens to list first.
+      def switch_to_a2dp(sink_name)
+        card_name = Bar::Domain::AudioSink.card_name(sink_name)
         return unless card_name
 
         system('pactl', 'set-card-profile', card_name, 'a2dp-sink')
-        sink_name = find_bluez_sink
-        return unless sink_name
-
         system('pactl', 'set-default-sink', sink_name)
         move_sink_inputs(sink_name)
         Bar::Managers::SharedState.instance.invalidate(:current_audio_sink)
-      end
-
-      def find_bluez_card
-        output = `pactl list cards short 2>/dev/null`
-        output.each_line do |line|
-          name = line.split[1]
-          return name if name&.start_with?('bluez_card.')
-        end
-        nil
-      end
-
-      def find_bluez_sink
-        output = `pactl list sinks short 2>/dev/null`
-        output.each_line do |line|
-          name = line.split[1]
-          return name if name&.start_with?('bluez_output.')
-        end
-        nil
       end
 
       def move_sink_inputs(sink_name)
