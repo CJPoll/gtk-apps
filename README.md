@@ -63,6 +63,7 @@ Widgets shell out to these tools. A missing tool degrades its widget
 | `gdbus` | `dev-libs/glib` (glib-utils) | SNI system tray (StatusNotifierItem) |
 | `hyprlock` | `gui-apps/hyprlock` | power controls: Lock |
 | `loginctl` | `sys-auth/elogind` | power controls: Power Off |
+| `nvidia-smi` | `x11-drivers/nvidia-drivers` | VRAM widget (hidden without it) |
 
 Optional helper scripts, expected at `~/dev/custom/scripts/`; their widgets
 hide themselves when a script is absent:

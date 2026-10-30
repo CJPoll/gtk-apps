@@ -76,3 +76,12 @@
     border-color: #ff6b35;
     box-shadow: 0 0 12px rgba(255, 107, 53, 0.7);
 }
+
+/* VramWidget pill: neon violet, distinct from cpu magenta and memory cyan.
+ * Hover falls through to the shared .pill:hover orange like its neighbours. */
+.vram,
+.vram label {
+    color: #b026ff;
+    font-weight: 600;
+    text-shadow: 0 0 8px rgba(176, 38, 255, 0.4);
+}

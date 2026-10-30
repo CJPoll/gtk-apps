@@ -88,6 +88,7 @@ module Bar
       # Center section
       add_widget(@center_box, UI::MemoryWidget.new)
       add_widget(@center_box, UI::CpuWidget.new)
+      add_widget(@center_box, UI::VramWidget.new(sample: -> { Managers::VramMonitor.instance.current }))
       add_widget(@center_box, UI::BatteryWidget.new)
       add_widget(@center_box, UI::BrightnessWidget.new)
 
